@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: 'Xolisile Study Hub',
-  description: 'Matric study platform for Xolisile',
+  title: 'Fundza — Matric Study Companion',
+  description: 'Track your NSC marks, calculate your APS, and study smarter for university admission',
 };
 
 export const viewport = {

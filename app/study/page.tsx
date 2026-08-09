@@ -1,48 +1,56 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { mathLitTopics } from '@/data/subjects';
-import TopicCard from '@/components/TopicCard';
+import AiQuizGenerator from '@/components/AiQuizGenerator';
 
 export default function StudyPage() {
-  const paper1 = mathLitTopics.filter(t => t.paper === 'Paper 1');
-  const paper2 = mathLitTopics.filter(t => t.paper === 'Paper 2');
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+
+  const weakTopics = [
+    'Probability', 'Maps & Plans', 'Compound Interest', 
+    'Surface Area', 'Blueprints', 'Floor Plans'
+  ];
 
   return (
     <main className="container">
-      <h1>Mathematical Literacy</h1>
+      <h1>Study Hub</h1>
       <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>
-        Target: Level 7 (80%+) — accepted for BA admission at UJ, UP & Wits
+        Practice with AI-generated questions tailored to your weak areas.
       </p>
-      
+
       <div className="card" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
-        <strong style={{ color: '#1e40af' }}>🎓 BA Pathway Note</strong>
+        <strong style={{ color: '#1e40af' }}>💡 Tip</strong>
         <p style={{ color: '#334155', fontSize: '0.875rem', marginTop: '0.5rem' }}>
-          Mathematical Literacy is <strong>accepted</strong> for Bachelor of Arts at all major universities. 
-          Your target is 80%+ (Level 7) to maximise your APS score. Focus on weak topics below.
+          Upload your latest report on the <Link href="/upload" style={{ color: '#2563eb', fontWeight: 600 }}>Analyze page</Link> to get AI-recommended topics.
         </p>
       </div>
 
       <div style={{ marginTop: '1.5rem' }}>
-        <h2>Paper 1 — Finance & Data Handling</h2>
-        <div className="grid grid-2">
-          {paper1.map(topic => (
-            <TopicCard key={topic.id} topic={topic} />
+        <h2>🤖 AI-Powered Practice</h2>
+        <p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>
+          Select a topic to generate a custom quiz:
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+          {weakTopics.map(t => (
+            <button
+              key={t}
+              onClick={() => setSelectedTopic(t)}
+              className="btn btn-secondary"
+              style={{ fontSize: '0.875rem', padding: '0.5rem 1rem' }}
+            >
+              {t}
+            </button>
           ))}
         </div>
-      </div>
-
-      <div style={{ marginTop: '1.5rem' }}>
-        <h2>Paper 2 — Measurement, Maps & Plans</h2>
-        <div className="grid grid-2">
-          {paper2.map(topic => (
-            <TopicCard key={topic.id} topic={topic} />
-          ))}
-        </div>
+        {selectedTopic && (
+          <AiQuizGenerator topic={selectedTopic} subject="Mathematical Literacy" studentLevel={40} />
+        )}
       </div>
 
       <div style={{ marginTop: '2rem' }}>
-        <Link href="/quiz" className="btn">Start Diagnostic Quiz</Link>
+        <Link href="/quiz" className="btn">Start General Quiz</Link>
+        <Link href="/upload" className="btn btn-secondary" style={{ marginLeft: '0.5rem' }}>📄 Upload Report</Link>
       </div>
 
       <nav className="nav">
@@ -50,6 +58,7 @@ export default function StudyPage() {
         <Link href="/quiz">Quiz</Link>
         <Link href="/exams">Exams</Link>
         <Link href="/progress">Progress</Link>
+        <Link href="/upload">Analyze</Link>
       </nav>
     </main>
   );
