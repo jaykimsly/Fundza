@@ -1,0 +1,100 @@
+create table students (
+  id uuid default gen_random_uuid() primary key,
+  full_name text not null,
+  email text unique,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table subjects (
+  id uuid default gen_random_uuid() primary key,
+  student_id uuid references students(id) on delete cascade,
+  name text not null,
+  code text not null,
+  current_percentage integer default 0,
+  target_percentage integer default 0,
+  priority text default 'medium',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table topics (
+  id uuid default gen_random_uuid() primary key,
+  subject_id uuid references subjects(id) on delete cascade,
+  name text not null,
+  paper text,
+  target_mastery integer default 80,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table questions (
+  id uuid default gen_random_uuid() primary key,
+  topic_id uuid references topics(id) on delete cascade,
+  question_text text not null,
+  question_type text default 'multiple_choice',
+  difficulty text default 'medium',
+  correct_answer text not null,
+  explanation text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table question_options (
+  id uuid default gen_random_uuid() primary key,
+  question_id uuid references questions(id) on delete cascade,
+  label text not null,
+  option_text text not null
+);
+
+create table quiz_attempts (
+  id uuid default gen_random_uuid() primary key,
+  student_id uuid references students(id) on delete cascade,
+  topic_id uuid references topics(id) on delete set null,
+  score integer not null,
+  total_questions integer not null,
+  completed_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table quiz_answers (
+  id uuid default gen_random_uuid() primary key,
+  attempt_id uuid references quiz_attempts(id) on delete cascade,
+  question_id uuid references questions(id) on delete cascade,
+  selected_answer text,
+  is_correct boolean not null
+);
+
+create table student_progress (
+  id uuid default gen_random_uuid() primary key,
+  student_id uuid references students(id) on delete cascade,
+  topic_id uuid references topics(id) on delete cascade,
+  attempts integer default 0,
+  correct_answers integer default 0,
+  percentage integer default 0,
+  mastery_level text default 'not-mastered',
+  last_attempted timestamp with time zone
+);
+
+create table exams (
+  id uuid default gen_random_uuid() primary key,
+  student_id uuid references students(id) on delete cascade,
+  subject_name text not null,
+  exam_date date not null,
+  exam_time time,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table study_sessions (
+  id uuid default gen_random_uuid() primary key,
+  student_id uuid references students(id) on delete cascade,
+  topic_id uuid references topics(id) on delete set null,
+  duration_minutes integer,
+  notes text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table students enable row level security;
+alter table subjects enable row level security;
+alter table topics enable row level security;
+alter table questions enable row level security;
+alter table quiz_attempts enable row level security;
+alter table quiz_answers enable row level security;
+alter table student_progress enable row level security;
+alter table exams enable row level security;
+alter table study_sessions enable row level security;
