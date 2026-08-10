@@ -80,8 +80,8 @@ export default function Dashboard() {
     .reduce((sum, s) => sum + getLevel(s.current_percentage), 0);
 
   const sortedSubjects = [...subjects].sort((a, b) => {
-    const order = { critical: 0, high: 1, medium: 2, low: 3 };
-    return (order[a.priority] || 2) - (order[b.priority] || 2);
+    const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    return (order[a.priority] ?? 2) - (order[b.priority] ?? 2);
   });
 
   const english = subjects.find(s => s.subjects_catalog?.code?.includes('ENG'));

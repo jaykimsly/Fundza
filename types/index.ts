@@ -1,3 +1,13 @@
+export interface Subject {
+  id: string;
+  name: string;
+  code: string;
+  currentPercentage: number;
+  targetPercentage: number;
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  color: string;
+}
+
 export interface School {
   id: string;
   name: string;
