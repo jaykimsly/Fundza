@@ -140,6 +140,8 @@ export default function SetupPage() {
           career_pathway: careerPathway,
           target_degree: targetDegree || null,
           target_university: targetUni || null,
+        }, {
+          onConflict: 'auth_user_id',
         })
         .select()
         .single();

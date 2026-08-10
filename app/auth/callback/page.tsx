@@ -3,24 +3,32 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import AppLoader from '@/components/AppLoader';
 
 export default function AuthCallback() {
   const router = useRouter();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let active = true;
+
+    const resolveSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!active) return;
+
       if (session) {
-        router.push('/');
+        router.replace('/');
       } else {
-        router.push('/login');
+        router.replace('/login');
       }
-    });
+    };
+
+    resolveSession();
+
+    return () => {
+      active = false;
+    };
   }, [router]);
 
-  return (
-    <main className="container" style={{ textAlign: 'center', paddingTop: '4rem' }}>
-      <h1>Logging you in...</h1>
-      <p style={{ color: '#64748b' }}>Please wait while we verify your account.</p>
-    </main>
-  );
+  return <AppLoader message="Verifying your account..." />;
 }

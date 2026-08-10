@@ -77,7 +77,7 @@ export default function AiQuizGenerator({ topic, subject, studentLevel = 50 }: P
   if (questions.length === 0) {
     return (
       <div className="card" style={{ textAlign: 'center' }}>
-        <h3>🤖 AI Quiz: {topic}</h3>
+        <h3>AI Quiz: {topic}</h3>
         <p style={{ color: '#64748b', margin: '1rem 0' }}>
           Generate a custom quiz on <strong>{topic}</strong> tailored to your level.
         </p>
@@ -108,7 +108,7 @@ export default function AiQuizGenerator({ topic, subject, studentLevel = 50 }: P
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h3>🤖 AI Quiz: {topic}</h3>
+        <h3>AI Quiz: {topic}</h3>
         <span style={{ color: '#64748b', fontSize: '0.875rem' }}>Q{currentIndex + 1}/{questions.length}</span>
       </div>
       <div className="card">

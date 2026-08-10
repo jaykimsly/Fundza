@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import ExamCountdown from '@/components/ExamCountdown';
 import ProgressBar from '@/components/ProgressBar';
+import AppIcon from '@/components/AppIcon';
+import AppLoader from '@/components/AppLoader';
 
 function getLevel(p: number) {
   if (p >= 80) return 7;
@@ -38,24 +40,36 @@ export default function Dashboard() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push('/login'); return; }
 
-      const studentId = localStorage.getItem('fundza_student_id');
-      if (!studentId) { router.push('/setup'); return; }
+      // Supabase Auth is the source of truth.
+      // localStorage is only used as a cache.
 
-      // Load profile with school and grade
-      const { data: student } = await supabase
+      const { data: student, error: studentError } = await supabase
         .from('students')
         .select('*, schools(name), grades(grade_number, description)')
-        .eq('id', studentId)
-        .single();
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
 
-      if (!student) { router.push('/setup'); return; }
+      if (studentError) {
+        console.error('Failed to load student profile:', studentError);
+        setLoading(false);
+        return;
+      }
+
+      if (!student) {
+        router.push('/setup');
+        return;
+      }
+
+      localStorage.setItem('fundza_student_id', student.id);
+      localStorage.setItem('fundza_student', JSON.stringify(student));
+
       setProfile(student);
 
-      // Load student subjects with catalog info
+      // Load student subjects with catalog info.
       const { data: subjData } = await supabase
         .from('student_subjects')
         .select('*, subjects_catalog(name, code, category, is_compulsory)')
-        .eq('student_id', studentId);
+        .eq('student_id', student.id);
 
       setSubjects(subjData || []);
       setLoading(false);
@@ -88,7 +102,7 @@ export default function Dashboard() {
   const maths = subjects.find(s => s.subjects_catalog?.code?.includes('MATH'));
   const lo = subjects.find(s => s.subjects_catalog?.code === 'LIFE_ORI');
 
-  if (loading) return <main className="container"><p>Loading your profile...</p></main>;
+  if (loading) return <AppLoader message="Loading your study space..." />;
 
   return (
     <main className="container">
@@ -101,7 +115,10 @@ export default function Dashboard() {
       </p>
 
       <div className="card" style={{ background: '#0f172a', color: 'white' }}>
-        <h2 style={{ color: '#fbbf24', marginBottom: '0.75rem' }}>📊 Admission Points Score (APS)</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem' }}>
+          <AppIcon name="chart" size={21} />
+          <h2 style={{ color: '#fbbf24', marginBottom: 0 }}>Admission Points Score (APS)</h2>
+        </div>
         <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
           <div>
             <p style={{ color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase' }}>Current APS</p>
@@ -137,7 +154,10 @@ export default function Dashboard() {
 
       {profile?.career_pathway === 'university' && (
         <div className="card" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
-          <h2 style={{ color: '#1e40af', fontSize: '1.1rem' }}>🎓 University Admission Requirements</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <AppIcon name="graduation" size={20} />
+            <h2 style={{ color: '#1e40af', fontSize: '1.1rem', marginBottom: 0 }}>University Admission Requirements</h2>
+          </div>
           <div style={{ marginTop: '0.75rem', fontSize: '0.875rem', color: '#334155', lineHeight: 1.7 }}>
             <p><strong>Bachelor Pass:</strong> APS 23+ • English Level 4 (50%+) • LO Level 3 (40%+)</p>
             <p><strong>UJ BA:</strong> APS 27 • English Level 5 (60%+)</p>
@@ -184,8 +204,7 @@ export default function Dashboard() {
         <Link href="/exams">Exams</Link>
         <Link href="/progress">Progress</Link>
         <Link href="/upload">Analyze</Link>
-        <Link href="/upload">📄 Analyze Report</Link>
-        <Link href="/setup">Edit Profile</Link>
+                <Link href="/setup">Edit Profile</Link>
       </nav>
     </main>
   );

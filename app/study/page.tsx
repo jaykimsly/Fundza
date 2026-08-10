@@ -20,14 +20,14 @@ export default function StudyPage() {
       </p>
 
       <div className="card" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
-        <strong style={{ color: '#1e40af' }}>💡 Tip</strong>
+        <strong style={{ color: '#1e40af' }}>Tip</strong>
         <p style={{ color: '#334155', fontSize: '0.875rem', marginTop: '0.5rem' }}>
           Upload your latest report on the <Link href="/upload" style={{ color: '#2563eb', fontWeight: 600 }}>Analyze page</Link> to get AI-recommended topics.
         </p>
       </div>
 
       <div style={{ marginTop: '1.5rem' }}>
-        <h2>🤖 AI-Powered Practice</h2>
+        <h2>AI-Powered Practice</h2>
         <p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>
           Select a topic to generate a custom quiz:
         </p>

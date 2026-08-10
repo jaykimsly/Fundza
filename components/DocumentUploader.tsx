@@ -299,7 +299,7 @@ export default function DocumentUploader({ studentId, onAnalysisComplete }: Prop
           className="btn"
           style={{ width: '100%', marginTop: '1rem', opacity: uploading || (!fileData && !textContent.trim()) ? 0.6 : 1 }}
         >
-          {uploading ? '⏳ Analyzing...' : '🤖 Analyze My Report'}
+          {uploading ? 'Analyzing...' : 'Analyze My Report'}
         </button>
 
         {/* Progress */}
