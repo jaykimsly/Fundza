@@ -15,7 +15,7 @@ export async function GET() {
       valueLength: cookie.value?.length ?? 0,
     })),
     supabaseCookies: allCookies
-      .filter((cookie) => cookie.name.includes('sb-'))
+      .filter((cookie) => cookie.name.startsWith('sb-'))
       .map((cookie) => ({
         name: cookie.name,
         hasValue: Boolean(cookie.value),
