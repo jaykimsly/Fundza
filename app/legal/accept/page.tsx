@@ -11,7 +11,6 @@ const required: LegalDocumentType[] = ['terms', 'privacy', 'copyright', 'legal']
 export default function LegalAcceptPage() {
   const router = useRouter();
   const [returnTo, setReturnTo] = useState('/');
-  const [userEmail, setUserEmail] = useState('');
   const [checked, setChecked] = useState<Record<LegalDocumentType, boolean>>({ terms: false, privacy: false, copyright: false, legal: false });
   const [understood, setUnderstood] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -27,13 +26,9 @@ export default function LegalAcceptPage() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/login'); return; }
-      setUserEmail(user.email || '');
       const { data: acceptances } = await supabase.from('legal_acceptances').select('document_type, document_version').eq('user_id', user.id);
       const next = { terms: false, privacy: false, copyright: false, legal: false };
-      for (const type of required) {
-        const version = LEGAL_DOCUMENTS[type].version;
-        next[type] = (acceptances || []).some((item) => item.document_type === type && item.document_version === version);
-      }
+      for (const type of required) next[type] = (acceptances || []).some((item) => item.document_type === type && item.document_version === LEGAL_DOCUMENTS[type].version);
       setChecked(next);
       setLoading(false);
     };
@@ -47,23 +42,17 @@ export default function LegalAcceptPage() {
     setSaving(true); setMessage(''); setEmailWarning('');
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.replace('/login'); return; }
-    const { data: existing, error: existingError } = await supabase.from('legal_acceptances').select('document_type, document_version').eq('user_id', user.id);
-    if (existingError) { setMessage(existingError.message); setSaving(false); return; }
-    const rows = required.filter((type) => !(existing || []).some((item) => item.document_type === type && item.document_version === LEGAL_DOCUMENTS[type].version)).map((type) => ({
-      user_id: user.id,
-      document_type: type,
-      document_version: LEGAL_DOCUMENTS[type].version,
-      acceptance_method: 'web',
-      signature_statement: 'I confirm that I have read, understood and agree to the current Fundza legal documents.',
-      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-    }));
-    if (rows.length) {
-      const { error } = await supabase.from('legal_acceptances').insert(rows);
-      if (error && !error.message.toLowerCase().includes('duplicate')) { setMessage(error.message); setSaving(false); return; }
+
+    const { data, error } = await supabase.functions.invoke('accept-legal-documents', {
+      body: { user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null },
+    });
+    if (error || data?.accepted !== true) {
+      setMessage(error?.message || data?.error || 'Unable to record your legal acceptance.');
+      setSaving(false);
+      return;
     }
-    const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-legal-acceptance-email', { body: { document_versions: required.map((type) => ({ type, version: LEGAL_DOCUMENTS[type].version })) } });
-    if (emailError || emailResult?.sent === false) setEmailWarning('Your acceptance was recorded, but the confirmation email could not be sent yet.');
-    else setMessage(`Your legal acceptance has been recorded. A confirmation email was sent to ${userEmail}.`);
+    if (data.email_sent === false) setEmailWarning('Your acceptance was recorded, but the confirmation email could not be sent yet.');
+    else setMessage('Your legal acceptance has been recorded and the confirmation email has been sent.');
     setSaving(false);
     router.replace(returnTo);
   };
