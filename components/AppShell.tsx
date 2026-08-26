@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import AppLoader from '@/components/AppLoader';
 
 const PUBLIC_ROUTES = ['/login', '/auth', '/legal'];
 const REQUIRED_DOCUMENTS = ['terms', 'privacy', 'copyright', 'legal'] as const;
@@ -92,7 +93,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname, router]);
 
   if (checkingLegal && !isPublicRoute(pathname)) {
-    return <main className="app-loading"><div className="loading-card"><strong>Checking your account...</strong><span>Verifying your Fundza legal documents before opening the app.</span></div></main>;
+    return <AppLoader message="Checking your account and preparing Fundza..." />;
   }
 
   return (
