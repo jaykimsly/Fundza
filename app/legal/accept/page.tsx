@@ -1,0 +1,152 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import { LEGAL_DOCUMENTS, LegalDocumentType } from '@/lib/legal';
+
+const required: LegalDocumentType[] = ['terms', 'privacy', 'copyright', 'legal'];
+
+export default function LegalAcceptPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get('returnTo') || '/';
+  const [userEmail, setUserEmail] = useState('');
+  const [checked, setChecked] = useState<Record<LegalDocumentType, boolean>>({ terms: false, privacy: false, copyright: false, legal: false });
+  const [understood, setUnderstood] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [emailWarning, setEmailWarning] = useState('');
+
+  useEffect(() => {
+    const load = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.replace('/login'); return; }
+      setUserEmail(user.email || '');
+
+      const { data: acceptances } = await supabase
+        .from('legal_acceptances')
+        .select('document_type, document_version')
+        .eq('user_id', user.id);
+
+      const next = { terms: false, privacy: false, copyright: false, legal: false };
+      for (const type of required) {
+        const version = LEGAL_DOCUMENTS[type].version;
+        next[type] = (acceptances || []).some((item) => item.document_type === type && item.document_version === version);
+      }
+      setChecked(next);
+      setLoading(false);
+    };
+    load();
+  }, [router]);
+
+  const allChecked = useMemo(() => required.every((type) => checked[type]) && understood, [checked, understood]);
+
+  const submit = async () => {
+    if (!allChecked || saving) return;
+    setSaving(true);
+    setMessage('');
+    setEmailWarning('');
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.replace('/login'); return; }
+
+    const { data: existing, error: existingError } = await supabase
+      .from('legal_acceptances')
+      .select('document_type, document_version')
+      .eq('user_id', user.id);
+
+    if (existingError) {
+      setMessage(existingError.message);
+      setSaving(false);
+      return;
+    }
+
+    const rows = required
+      .filter((type) => !(existing || []).some((item) => item.document_type === type && item.document_version === LEGAL_DOCUMENTS[type].version))
+      .map((type) => ({
+        user_id: user.id,
+        document_type: type,
+        document_version: LEGAL_DOCUMENTS[type].version,
+        acceptance_method: 'web',
+        signature_statement: 'I confirm that I have read, understood and agree to the current Fundza legal documents.',
+        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      }));
+
+    if (rows.length) {
+      const { error } = await supabase.from('legal_acceptances').insert(rows);
+      if (error && !error.message.toLowerCase().includes('duplicate')) {
+        setMessage(error.message);
+        setSaving(false);
+        return;
+      }
+    }
+
+    const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-legal-acceptance-email', {
+      body: {
+        document_versions: required.map((type) => ({ type, version: LEGAL_DOCUMENTS[type].version })),
+      },
+    });
+
+    if (emailError || emailResult?.sent === false) {
+      setEmailWarning('Your acceptance was recorded, but the confirmation email could not be sent yet. The account remains active because the legal acceptance itself is complete.');
+    } else {
+      setMessage(`Your legal acceptance has been recorded. A confirmation email was sent to ${userEmail}.`);
+    }
+
+    setSaving(false);
+    router.replace(returnTo.startsWith('/') ? returnTo : '/');
+  };
+
+  if (loading) return <main className="app-loading"><div className="loading-card"><strong>Loading legal documents...</strong><span>Checking which current versions your account has accepted.</span></div></main>;
+
+  return (
+    <main className="legal-shell">
+      <section className="legal-hero">
+        <p style={{ color: 'var(--brand)', fontWeight: 700, fontSize: '.8rem', textTransform: 'uppercase' }}>Account access</p>
+        <h1>Review and sign before continuing</h1>
+        <p>Your account is temporarily limited to this page until all required current documents are accepted. This happens again whenever a required document version changes.</p>
+      </section>
+
+      <div className="legal-status locked">
+        <strong>Account locked for app access.</strong> Review the four current documents below and confirm that you understand them. Your profile remains available so you can manage this requirement.
+      </div>
+
+      <section className="card">
+        <h2>Required documents</h2>
+        <div className="legal-checklist">
+          {required.map((type) => {
+            const document = LEGAL_DOCUMENTS[type];
+            return (
+              <label className="legal-check" key={type}>
+                <input type="checkbox" checked={checked[type]} onChange={(event) => setChecked((current) => ({ ...current, [type]: event.target.checked }))} />
+                <span>
+                  <strong>{document.title} · v{document.version}</strong>
+                  <span><Link href={document.href} target="_blank" rel="noreferrer">Open and review the full document</Link>. Tick this box only after reading it.</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+
+        <label className="legal-check legal-signature">
+          <input type="checkbox" checked={understood} onChange={(event) => setUnderstood(event.target.checked)} />
+          <span>
+            <strong>I confirm that I have read, understood and agree to the current Fundza legal documents.</strong>
+            <span>This is your electronic acceptance. Fundza records the document versions, timestamp, acceptance method and browser user-agent for the audit record.</span>
+          </span>
+        </label>
+
+        {message && <div className="legal-status success" style={{ marginTop: '1rem' }}>{message}</div>}
+        {emailWarning && <div className="legal-status locked" style={{ marginTop: '1rem' }}>{emailWarning}</div>}
+
+        <div className="legal-actions">
+          <button className="btn" disabled={!allChecked || saving} onClick={submit}>{saving ? 'Saving acceptance...' : 'Sign and continue'}</button>
+          <Link className="btn btn-secondary" href="/profile">Open profile</Link>
+        </div>
+      </section>
+    </main>
+  );
+}
