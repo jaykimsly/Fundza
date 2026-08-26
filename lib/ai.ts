@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 const apiKey = process.env.GEMINI_API_KEY || '';
 
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
+export const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.6-flash';
 export const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001';
 
 export function isGeminiConfigured() {
@@ -12,6 +13,21 @@ export function isGeminiConfigured() {
 function client() {
   if (!isGeminiConfigured()) throw new Error('GEMINI_API_KEY is not configured');
   return new GoogleGenAI({ apiKey });
+}
+
+function shouldFallbackModel(error: any) {
+  const raw = `${error?.status ?? ''} ${error?.message ?? ''}`.toLowerCase();
+  return raw.includes('503') || raw.includes('unavailable') || raw.includes('high demand') || raw.includes('overloaded');
+}
+
+async function withModelFallback<T>(operation: (model: string) => Promise<T>): Promise<T> {
+  try {
+    return await operation(GEMINI_MODEL);
+  } catch (error) {
+    if (GEMINI_MODEL === GEMINI_FALLBACK_MODEL || !shouldFallbackModel(error)) throw error;
+    console.warn(`Gemini model ${GEMINI_MODEL} unavailable; retrying with ${GEMINI_FALLBACK_MODEL}.`);
+    return operation(GEMINI_FALLBACK_MODEL);
+  }
 }
 
 function parseJsonResponse<T>(text: string): T {
@@ -35,21 +51,23 @@ function parseJsonResponse<T>(text: string): T {
 
 export async function generateJson<T>(input: string, schema: Record<string, unknown>): Promise<T> {
   const ai = client();
-  const response = await ai.models.generateContent({
-    model: GEMINI_MODEL,
-    contents: input,
-    config: {
-      responseFormat: {
-        text: {
-          mimeType: 'application/json',
-          schema,
+  return withModelFallback(async (model) => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: input,
+      config: {
+        responseFormat: {
+          text: {
+            mimeType: 'application/json',
+            schema,
+          },
         },
-      },
-      thinkingConfig: { thinkingLevel: 'medium' },
-    } as any,
-  });
+        thinkingConfig: { thinkingLevel: 'medium' },
+      } as any,
+    });
 
-  return parseJsonResponse<T>(response.text || '');
+    return parseJsonResponse<T>(response.text || '');
+  });
 }
 
 export async function generateMultimodalJson<T>(
@@ -59,24 +77,26 @@ export async function generateMultimodalJson<T>(
   schema: Record<string, unknown>,
 ): Promise<T> {
   const ai = client();
-  const response = await ai.models.generateContent({
-    model: GEMINI_MODEL,
-    contents: [
-      { text: prompt },
-      { inlineData: { data: fileData, mimeType } },
-    ],
-    config: {
-      responseFormat: {
-        text: {
-          mimeType: 'application/json',
-          schema,
+  return withModelFallback(async (model) => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [
+        { text: prompt },
+        { inlineData: { data: fileData, mimeType } },
+      ],
+      config: {
+        responseFormat: {
+          text: {
+            mimeType: 'application/json',
+            schema,
+          },
         },
-      },
-      thinkingConfig: { thinkingLevel: 'medium' },
-    } as any,
-  });
+        thinkingConfig: { thinkingLevel: 'medium' },
+      } as any,
+    });
 
-  return parseJsonResponse<T>(response.text || '');
+    return parseJsonResponse<T>(response.text || '');
+  });
 }
 
 export async function embedText(text: string, title?: string) {
