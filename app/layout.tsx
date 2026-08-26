@@ -1,19 +1,24 @@
 import "./globals.css";
+import NetworkStatus from '@/components/NetworkStatus';
 
 export const metadata = {
-  title: 'Fundza — Matric Study Companion',
-  description: 'Track your NSC marks, calculate your APS, and study smarter for university admission',
+  title: 'Fundza — Your Study Companion',
+  description: 'A simple South African study companion for Grade 10 to Grade 12 learners.',
 };
 
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
+  themeColor: '#0f172a',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <NetworkStatus />
+        {children}
+      </body>
     </html>
   );
 }
