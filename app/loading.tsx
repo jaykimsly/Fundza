@@ -1,5 +1,5 @@
-import StatusScreen from '@/components/StatusScreen';
+import { PageSkeleton } from '@/components/Skeleton';
 
 export default function Loading() {
-  return <StatusScreen kind="loading" />;
+  return <PageSkeleton variant="dashboard" />;
 }
