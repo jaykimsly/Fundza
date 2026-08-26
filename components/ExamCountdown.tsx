@@ -1,54 +1,143 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+
+interface ExamRow {
+  id: string;
+  exam_date: string;
+  start_time: string;
+  duration_minutes: number;
+  session: 'first' | 'second';
+  subject_name: string;
+  paper: string;
+  exam_type: string;
+}
+
+interface StudentSubjectRow {
+  subject_id: string;
+  subjects_catalog: { name: string; code: string } | null;
+}
+
+function startDate(exam: ExamRow) {
+  return new Date(`${exam.exam_date}T${exam.start_time}+02:00`);
+}
+
+function normalise(value: string) {
+  return value.toLowerCase().replace(/\([^)]*\)/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function canonical(value: string) {
+  const name = normalise(value);
+  if (name.includes('english fal') || name.includes('english first additional language')) return 'english first additional language';
+  if (name.includes('english hl') || name.includes('english home language')) return 'english home language';
+  if (name.includes('afrikaans fal') || name.includes('afrikaans first additional language')) return 'afrikaans first additional language';
+  if (name.includes('afrikaans sal') || name.includes('afrikaans second additional language')) return 'afrikaans second additional language';
+  if (name.includes('afrikaans hl') || name.includes('afrikaans home language')) return 'afrikaans home language';
+  if (name === 'cat' || name.includes('computer applications technology')) return 'computer applications technology';
+  if (name === 'it' || name.includes('information technology')) return 'information technology';
+  if (name === 'lo' || name.includes('life orientation')) return 'life orientation';
+  return name;
+}
+
+function matchesSubject(examName: string, catalogName: string) {
+  const exam = canonical(examName);
+  const subject = canonical(catalogName);
+  return exam === subject || exam.includes(subject) || subject.includes(exam);
+}
+
+function getTimeLeft(target: Date, now: Date) {
+  const diff = target.getTime() - now.getTime();
+  if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+  return {
+    days: Math.floor(diff / 86400000),
+    hours: Math.floor((diff / 3600000) % 24),
+    minutes: Math.floor((diff / 60000) % 60),
+    seconds: Math.floor((diff / 1000) % 60),
+  };
+}
 
 export default function ExamCountdown() {
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [exams, setExams] = useState<ExamRow[]>([]);
+  const [studentSubjects, setStudentSubjects] = useState<StudentSubjectRow[]>([]);
+  const [now, setNow] = useState(() => new Date());
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const examDate = new Date('2026-10-20T09:00:00+02:00');
-    
-    const calculate = () => {
-      const now = new Date();
-      const diff = examDate.getTime() - now.getTime();
-      
-      if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-      
-      return {
-        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
-        minutes: Math.floor((diff / (1000 * 60)) % 60),
-        seconds: Math.floor((diff / 1000) % 60),
-      };
+    const load = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setLoading(false); return; }
+
+      const { data: student } = await supabase
+        .from('students')
+        .select('id, grades(grade_number)')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
+
+      const gradeNumber = (student as any)?.grades?.grade_number;
+      if (!student || gradeNumber !== 12) { setLoading(false); return; }
+
+      const [{ data: timetable }, { data: subjects }] = await Promise.all([
+        supabase.from('exam_timetable')
+          .select('id, exam_date, start_time, duration_minutes, session, subject_name, paper, exam_type')
+          .eq('grade_number', 12).eq('exam_type', 'preparatory')
+          .order('exam_date').order('start_time'),
+        supabase.from('student_subjects')
+          .select('subject_id, subjects_catalog(name, code)')
+          .eq('student_id', student.id),
+      ]);
+
+      setExams(timetable || []);
+      setStudentSubjects((subjects || []) as unknown as StudentSubjectRow[]);
+      setLoading(false);
     };
 
-    setTimeLeft(calculate());
-    const interval = setInterval(() => setTimeLeft(calculate()), 1000);
+    load();
+    const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
 
+  const upcoming = useMemo(() => {
+    const enrolled = studentSubjects.map(s => s.subjects_catalog).filter(Boolean) as { name: string; code: string }[];
+    return exams
+      .filter(exam => startDate(exam).getTime() > now.getTime())
+      .filter(exam => enrolled.some(subject => matchesSubject(exam.subject_name, subject.name)))
+      .slice(0, 5);
+  }, [exams, studentSubjects, now]);
+
+  if (loading || upcoming.length === 0) return null;
+
+  const next = upcoming[0];
+  const nextTime = getTimeLeft(startDate(next), now);
+
   return (
-    <div className="card">
-      <h2>Exam Countdown</h2>
-      <p style={{ color: '#64748b', fontSize: '0.875rem' }}>Matric Exams 2026</p>
-      <div className="countdown">
-        <div className="countdown-item">
-          <div className="countdown-number">{timeLeft.days}</div>
-          <div className="countdown-label">Days</div>
-        </div>
-        <div className="countdown-item">
-          <div className="countdown-number">{timeLeft.hours}</div>
-          <div className="countdown-label">Hours</div>
-        </div>
-        <div className="countdown-item">
-          <div className="countdown-number">{timeLeft.minutes}</div>
-          <div className="countdown-label">Mins</div>
-        </div>
-        <div className="countdown-item">
-          <div className="countdown-number">{timeLeft.seconds}</div>
-          <div className="countdown-label">Secs</div>
+    <section className="card" aria-label="Upcoming exams">
+      <h2>Upcoming Exams</h2>
+      <p style={{ color: '#64748b', fontSize: '0.875rem' }}>
+        Your next Grade 12 preparatory exam based on the subjects in your Fundza profile.
+      </p>
+      <div className="countdown" style={{ marginTop: '1rem' }}>
+        <div className="countdown-item"><div className="countdown-number">{nextTime.days}</div><div className="countdown-label">Days</div></div>
+        <div className="countdown-item"><div className="countdown-number">{nextTime.hours}</div><div className="countdown-label">Hours</div></div>
+        <div className="countdown-item"><div className="countdown-number">{nextTime.minutes}</div><div className="countdown-label">Mins</div></div>
+        <div className="countdown-item"><div className="countdown-number">{nextTime.seconds}</div><div className="countdown-label">Secs</div></div>
+      </div>
+      <div style={{ marginTop: '1rem', padding: '0.875rem', background: '#f8fafc', borderRadius: '8px' }}>
+        <strong>{next.subject_name}</strong>
+        <div style={{ color: '#475569', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+          {next.paper} • {next.exam_date} • {next.start_time.slice(0, 5)} • {next.duration_minutes} min
         </div>
       </div>
-    </div>
+      {upcoming.length > 1 && (
+        <div style={{ marginTop: '0.75rem' }}>
+          <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>Next after this</p>
+          {upcoming.slice(1).map(exam => (
+            <div key={exam.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', padding: '0.45rem 0', fontSize: '0.8rem', borderBottom: '1px solid #e2e8f0' }}>
+              <span>{exam.subject_name} {exam.paper}</span><span style={{ color: '#64748b' }}>{exam.exam_date}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

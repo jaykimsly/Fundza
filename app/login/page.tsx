@@ -35,20 +35,24 @@ export default function LoginPage() {
       setMessage('Please enter a valid email');
       return;
     }
+
     setLoading(true);
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        shouldCreateUser: true,
+        shouldCreateUser: false,
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
+
     if (error) {
       setMessage(error.message);
     } else {
       setOtpSent(true);
       setMessage('Check your email for the login code!');
     }
+
     setLoading(false);
   };
 
@@ -74,7 +78,7 @@ export default function LoginPage() {
   return (
     <main className="container" style={{ maxWidth: '420px', paddingTop: '2rem' }}>
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <div style={{ fontSize: '3rem' }}>🎓</div>
+        <div style={{ fontSize: '3rem' }}></div>
         <h1 style={{ fontSize: '1.75rem', marginTop: '0.5rem' }}>Fundza</h1>
         <p style={{ color: '#64748b', fontSize: '0.9375rem' }}>Your matric study companion</p>
       </div>

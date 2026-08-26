@@ -1,21 +1,76 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import AiQuizGenerator from '@/components/AiQuizGenerator';
-import StatusScreen from '@/components/StatusScreen';
-import { supabase } from '@/lib/supabase';
-import { PageSkeleton } from '@/components/Skeleton';
+import AppLoader from '@/components/AppLoader';
+import { getCurrentStudent, StudentSubjectWithCatalog } from '@/lib/student-data';
 
-type Subject={id:string;subject_id:string|null;current_percentage:number|null;target_percentage:number|null;priority:string|null;subjects_catalog?:{name:string;code:string}|null};
-type Topic={id:string;name:string;description:string|null;paper:string|null;term:number|null;subject_id:string|null};
+export default function StudyPage() {
+  const router = useRouter();
+  const [subjects, setSubjects] = useState<StudentSubjectWithCatalog[]>([]);
+  const [selected, setSelected] = useState<StudentSubjectWithCatalog | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export default function StudyPage(){
- const router=useRouter();const[subjects,setSubjects]=useState<Subject[]>([]);const[topics,setTopics]=useState<Topic[]>([]);const[selectedSubject,setSelectedSubject]=useState('');const[selectedTopic,setSelectedTopic]=useState<string|null>(null);const[studentLevel,setStudentLevel]=useState(0);const[loading,setLoading]=useState(true);const[error,setError]=useState<string|null>(null);
- const load=useCallback(async()=>{setLoading(true);setError(null);try{if(!navigator.onLine)throw new Error('No internet connection. Connect to Wi-Fi or mobile data and try again.');const{data:{session},error:authError}=await supabase.auth.getSession();if(authError)throw authError;if(!session){router.push('/login');return;}const studentId=localStorage.getItem('fundza_student_id');if(!studentId){router.push('/setup');return;}const{data,error:subjectError}=await supabase.from('student_subjects').select('id, subject_id, current_percentage, target_percentage, priority, subjects_catalog(name, code)').eq('student_id',studentId).order('created_at');if(subjectError)throw subjectError;const liveSubjects:Subject[]=(data||[]).map((s:any)=>({...s,subjects_catalog:Array.isArray(s.subjects_catalog)?s.subjects_catalog[0]||null:s.subjects_catalog}));setSubjects(liveSubjects);const first=liveSubjects[0]?.subject_id||'';setSelectedSubject(first);const average=liveSubjects.length?Math.round(liveSubjects.reduce((sum,s)=>sum+(s.current_percentage||0),0)/liveSubjects.length):0;setStudentLevel(average);if(first){const{data:topicData,error:topicError}=await supabase.from('topics').select('id,name,description,paper,term,subject_id').eq('subject_id',first).order('term').order('name');if(topicError)throw topicError;setTopics((topicData||[]) as Topic[]);}}catch(err:any){console.error('Study load error:',err);setError(err?.message||'We could not load your study subjects.');}finally{setLoading(false);}},[router]);
- useEffect(()=>{load();},[load]);
- const changeSubject=async(id:string)=>{setSelectedSubject(id);setSelectedTopic(null);setTopics([]);const{data,error:topicError}=await supabase.from('topics').select('id,name,description,paper,term,subject_id').eq('subject_id',id).order('term').order('name');if(topicError){setError(topicError.message);return;}setTopics((data||[]) as Topic[]);};
- if(loading)return <PageSkeleton/>;if(error)return <StatusScreen kind="error" message={error} onRetry={load}/>;const selected=subjects.find(s=>s.subject_id===selectedSubject);const weak=[...subjects].sort((a,b)=>(a.current_percentage||0)-(b.current_percentage||0)).slice(0,3);
- return <main className="container"><h1>Study Hub</h1><p style={{color:'#64748b',marginBottom:'1.5rem'}}>Your subjects and revision topics come from your Fundza profile, so the study plan follows the learner instead of a hard-coded demo.</p>{subjects.length===0?<div className="card empty-state"><h2>No subjects yet</h2><p>Choose your subjects in your learner profile before starting revision.</p><Link href="/setup" className="btn">Complete Profile</Link></div>:<><div className="card"><h2>Your Subjects</h2><div style={{display:'flex',gap:'.5rem',flexWrap:'wrap',marginTop:'.75rem'}}>{subjects.map(s=><button key={s.subject_id||s.id} onClick={()=>changeSubject(s.subject_id||'')} className={selectedSubject===s.subject_id?'btn':'btn btn-secondary'}>{s.subjects_catalog?.name||'Subject'}</button>)}</div>{selected&&<p className="data-meta">Current {selected.current_percentage??0}% • Target {selected.target_percentage??0}% • Priority {selected.priority||'normal'}</p>}</div><div className="card"><h2>Revision Topics</h2>{topics.length===0?<div className="empty-state"><h2>No topics yet</h2><p>There are no published topics for this subject yet. You can still use the general quiz.</p><Link href="/quiz" className="btn btn-secondary">General Quiz</Link></div>:<div className="grid grid-2">{topics.map(t=><button key={t.id} onClick={()=>setSelectedTopic(t.name)} className="card" style={{textAlign:'left',cursor:'pointer',border:'1px solid #e2e8f0'}}><strong>{t.name}</strong><span className="data-meta">{t.paper||'Revision'}{t.term?` • Term ${t.term}`:''}</span>{t.description&&<span style={{display:'block',color:'#64748b',fontSize:'.82rem',marginTop:'.25rem'}}>{t.description}</span>}</button>)}</div>}</div>{selectedTopic&&selected&&<div className="card"><h2>AI Practice: {selectedTopic}</h2><AiQuizGenerator topic={selectedTopic} subject={selected.subjects_catalog?.name||'Subject'} studentLevel={studentLevel}/></div>}<div className="card" style={{background:'#f8fafc'}}><h2>Recommended Focus</h2><p style={{color:'#64748b',marginBottom:'.75rem'}}>Start with the subjects furthest from their targets.</p>{weak.map(s=><div key={s.id} style={{display:'flex',justifyContent:'space-between',padding:'.6rem 0',borderBottom:'1px solid #e2e8f0'}}><span>{s.subjects_catalog?.name}</span><strong>{s.current_percentage??0}% → {s.target_percentage??0}%</strong></div>)}</div><div style={{display:'flex',gap:'.5rem',flexWrap:'wrap'}}><Link href="/quiz" className="btn">Start General Quiz</Link><Link href="/upload" className="btn btn-secondary">Analyze Report</Link></div></>}</main>;
+  useEffect(() => {
+    getCurrentStudent().then(({ session, student, subjects: savedSubjects }) => {
+      if (!session) { router.push('/login'); return; }
+      if (!student) { router.push('/setup'); return; }
+      setSubjects(savedSubjects);
+      setSelected(savedSubjects[0] || null);
+      setLoading(false);
+    }).catch(error => {
+      console.error(error);
+      setLoading(false);
+    });
+  }, [router]);
+
+  if (loading) return <AppLoader message="Loading your study space..." />;
+
+  return (
+    <main className="container">
+      <h1>Study Hub</h1>
+      <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>
+        Study from the subjects saved in your Fundza profile. The same subject list is used by Dashboard, Quiz, Exams and Progress.
+      </p>
+
+      <div className="card">
+        <h2>My Subjects</h2>
+        <div style={{ display: 'grid', gap: '0.5rem', marginTop: '1rem' }}>
+          {subjects.map(subject => (
+            <button key={subject.id} onClick={() => setSelected(subject)} className="btn btn-secondary" style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between' }}>
+              <span>{subject.subjects_catalog?.name}</span>
+              <span>{subject.current_percentage}% → {subject.target_percentage}%</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selected && (
+        <div className="card">
+          <h2>{selected.subjects_catalog?.name}</h2>
+          <p style={{ color: '#64748b', fontSize: '0.875rem' }}>
+            Current mark: {selected.current_percentage}% • Target: {selected.target_percentage}% • Priority: {selected.priority}
+          </p>
+          <AiQuizGenerator
+            topic={selected.subjects_catalog?.name || 'General revision'}
+            subject={selected.subjects_catalog?.name || 'Subject'}
+            studentLevel={Number(selected.current_percentage || 0)}
+          />
+        </div>
+      )}
+
+      {!subjects.length && <div className="card"><p>No subjects are saved yet. Complete your profile first.</p><Link href="/profile/edit" className="btn">Set Up Subjects</Link></div>}
+
+      <div style={{ marginTop: '2rem' }}>
+        <Link href="/quiz" className="btn">Go to Quiz</Link>
+        <Link href="/upload" className="btn btn-secondary" style={{ marginLeft: '0.5rem' }}>Upload Report</Link>
+      </div>
+
+      <nav className="nav">
+        <Link href="/">Dashboard</Link><Link href="/profile">Profile</Link><Link href="/quiz">Quiz</Link><Link href="/exams">Exams</Link><Link href="/progress">Progress</Link>
+      </nav>
+    </main>
+  );
 }

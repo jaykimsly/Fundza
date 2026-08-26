@@ -76,7 +76,7 @@ export default function AnalysisResults({ analysis, studentId }: Props) {
   return (
     <div>
       <div className="card" style={{ background: '#0f172a', color: 'white' }}>
-        <h2 style={{ color: '#fbbf24', marginBottom: '0.75rem' }}>🤖 AI Analysis Results</h2>
+        <h2 style={{ color: '#fbbf24', marginBottom: '0.75rem' }}>AI Analysis Results</h2>
         <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>
           {analysis.student_name && `${analysis.student_name} • `}
           {analysis.school_name && `${analysis.school_name} • `}
