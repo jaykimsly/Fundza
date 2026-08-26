@@ -46,31 +46,22 @@ export function contentHash(text: string) {
 export async function ingestKnowledgeDocument(text: string, meta: KnowledgeMetadata) {
   const supabase = getSupabaseAdmin();
   const hash = contentHash(text);
-
-  const { data: existing } = await supabase
-    .from('knowledge_documents')
-    .select('id')
-    .eq('content_hash', hash)
-    .maybeSingle();
+  const { data: existing } = await supabase.from('knowledge_documents').select('id').eq('content_hash', hash).maybeSingle();
   if (existing?.id) return { documentId: existing.id, chunksCreated: 0, duplicate: true };
 
-  const { data: document, error: documentError } = await supabase
-    .from('knowledge_documents')
-    .insert({
-      title: meta.title,
-      source_type: meta.source_type,
-      subject_code: meta.subject_code ?? null,
-      subject_name: meta.subject_name ?? null,
-      grade: meta.grade ?? null,
-      paper: meta.paper ?? null,
-      exam_year: meta.exam_year ?? null,
-      exam_session: meta.exam_session ?? null,
-      source_name: meta.source_name ?? null,
-      content_hash: hash,
-      metadata: meta.metadata ?? {},
-    })
-    .select('id')
-    .single();
+  const { data: document, error: documentError } = await supabase.from('knowledge_documents').insert({
+    title: meta.title,
+    source_type: meta.source_type,
+    subject_code: meta.subject_code ?? null,
+    subject_name: meta.subject_name ?? null,
+    grade: meta.grade ?? null,
+    paper: meta.paper ?? null,
+    exam_year: meta.exam_year ?? null,
+    exam_session: meta.exam_session ?? null,
+    source_name: meta.source_name ?? null,
+    content_hash: hash,
+    metadata: meta.metadata ?? {},
+  }).select('id').single();
   if (documentError) throw documentError;
 
   const chunks = chunkText(text);
@@ -86,16 +77,10 @@ export async function ingestKnowledgeDocument(text: string, meta: KnowledgeMetad
     });
     if (error) throw error;
   }
-
   return { documentId: document.id, chunksCreated: chunks.length, duplicate: false };
 }
 
-export async function retrieveKnowledge(options: {
-  query: string;
-  matchCount?: number;
-  subjectCode?: string | null;
-  grade?: number | null;
-}) {
+export async function retrieveKnowledge(options: { query: string; matchCount?: number; subjectCode?: string | null; grade?: number | null }) {
   const supabase = getSupabaseAdmin();
   const embedding = await embedQuery(options.query);
   const { data, error } = await supabase.rpc('match_knowledge_chunks', {
@@ -112,21 +97,19 @@ export async function resolveSubject(subjectName: string) {
   const supabase = getSupabaseAdmin();
   const normalized = normalizeSubjectName(subjectName);
 
-  const { data: aliases } = await supabase
+  const { data: aliases, error: aliasError } = await supabase
     .from('subject_aliases')
-    .select('subject_id, alias, normalized_alias, subjects_catalog:subject_id(id,name,code)')
+    .select('subject_id,alias,normalized_alias')
     .eq('normalized_alias', normalized)
     .limit(1);
-  if (aliases?.[0]?.subjects_catalog) {
-    return { ...aliases[0].subjects_catalog, confidence: 1 };
+  if (aliasError) throw aliasError;
+  if (aliases?.[0]?.subject_id) {
+    const { data: subject } = await supabase.from('subjects_catalog').select('id,name,code').eq('id', aliases[0].subject_id).maybeSingle();
+    if (subject) return { ...subject, confidence: 1 };
   }
 
-  const { data: subjects, error } = await supabase
-    .from('subjects_catalog')
-    .select('id,name,code')
-    .limit(500);
+  const { data: subjects, error } = await supabase.from('subjects_catalog').select('id,name,code').limit(500);
   if (error) throw error;
-
   const scored = (subjects ?? []).map((subject: any) => {
     const candidate = normalizeSubjectName(subject.name);
     const a = new Set(normalized.split(' '));
