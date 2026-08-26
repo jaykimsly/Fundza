@@ -14,6 +14,25 @@ function client() {
   return new GoogleGenAI({ apiKey });
 }
 
+function parseJsonResponse<T>(text: string): T {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error('Gemini returned an empty response');
+
+  const unfenced = trimmed
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  try {
+    return JSON.parse(unfenced) as T;
+  } catch {
+    const start = unfenced.indexOf('{');
+    const end = unfenced.lastIndexOf('}');
+    if (start >= 0 && end > start) return JSON.parse(unfenced.slice(start, end + 1)) as T;
+    throw new Error('Gemini returned invalid JSON');
+  }
+}
+
 export async function generateJson<T>(input: string, schema: Record<string, unknown>): Promise<T> {
   const ai = client();
   const response = await ai.models.generateContent({
@@ -30,9 +49,7 @@ export async function generateJson<T>(input: string, schema: Record<string, unkn
     } as any,
   });
 
-  const text = response.text?.trim();
-  if (!text) throw new Error('Gemini returned an empty response');
-  return JSON.parse(text) as T;
+  return parseJsonResponse<T>(response.text || '');
 }
 
 export async function generateMultimodalJson<T>(
@@ -59,9 +76,7 @@ export async function generateMultimodalJson<T>(
     } as any,
   });
 
-  const text = response.text?.trim();
-  if (!text) throw new Error('Gemini returned an empty response');
-  return JSON.parse(text) as T;
+  return parseJsonResponse<T>(response.text || '');
 }
 
 export async function embedText(text: string, title?: string) {
