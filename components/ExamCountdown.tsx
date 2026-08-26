@@ -27,21 +27,23 @@ function normalise(value: string) {
   return value.toLowerCase().replace(/\([^)]*\)/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function canonical(value: string) {
+  const name = normalise(value);
+  if (name.includes('english fal') || name.includes('english first additional language')) return 'english first additional language';
+  if (name.includes('english hl') || name.includes('english home language')) return 'english home language';
+  if (name.includes('afrikaans fal') || name.includes('afrikaans first additional language')) return 'afrikaans first additional language';
+  if (name.includes('afrikaans sal') || name.includes('afrikaans second additional language')) return 'afrikaans second additional language';
+  if (name.includes('afrikaans hl') || name.includes('afrikaans home language')) return 'afrikaans home language';
+  if (name === 'cat' || name.includes('computer applications technology')) return 'computer applications technology';
+  if (name === 'it' || name.includes('information technology')) return 'information technology';
+  if (name === 'lo' || name.includes('life orientation')) return 'life orientation';
+  return name;
+}
+
 function matchesSubject(examName: string, catalogName: string) {
-  const exam = normalise(examName);
-  const subject = normalise(catalogName);
-  if (exam === subject || exam.includes(subject) || subject.includes(exam)) return true;
-  const aliases: Record<string, string[]> = {
-    'english home language': ['english hl'],
-    'english first additional language': ['english fal'],
-    'afrikaans home language': ['afrikaans hl'],
-    'afrikaans first additional language': ['afrikaans fal'],
-    'afrikaans second additional language': ['afrikaans sal'],
-    'computer applications technology': ['cat'],
-    'information technology': ['it'],
-    'life orientation': ['lo'],
-  };
-  return (aliases[subject] || []).some(alias => exam.includes(normalise(alias)));
+  const exam = canonical(examName);
+  const subject = canonical(catalogName);
+  return exam === subject || exam.includes(subject) || subject.includes(exam);
 }
 
 function getTimeLeft(target: Date, now: Date) {
