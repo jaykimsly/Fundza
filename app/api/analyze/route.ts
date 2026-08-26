@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
     const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return fail('Please sign in before analysing a report.', 'AUTH_REQUIRED', 401);
-
     if (!isGeminiConfigured()) return fail('The AI report reader is not configured yet.', 'NO_API_KEY', 503);
 
     let body: any;
@@ -23,11 +22,7 @@ export async function POST(request: NextRequest) {
     const { fileData, mimeType, content, term, mode, studentId, fileName } = body || {};
     if (!studentId) return fail('Your learner profile could not be identified.', 'INVALID_REQUEST', 400);
 
-    const { data: student } = await supabase
-      .from('students')
-      .select('id,auth_user_id,grade')
-      .eq('id', studentId)
-      .maybeSingle();
+    const { data: student } = await supabase.from('students').select('id,auth_user_id,grade').eq('id', studentId).maybeSingle();
     if (!student || student.auth_user_id !== user.id) return fail('This report does not belong to the signed-in learner.', 'ACCESS_DENIED', 403);
 
     const prompt = `You are Fundza's South African school-report extraction engine. Extract only facts explicitly present in the supplied report. Do not invent, infer or autocomplete subject names, percentages, comments, school names, learner names, grades or terms. If a field is not present, return null. Preserve the report's subject wording exactly in the name field. ${term ? `The uploader says this is ${term}, but prefer the document if it states a different term.` : ''}\n\nExtract the learner name, school, grade, term, overall performance and every subject with its percentage/comment. Weak and strong topics must only be included if explicitly supported by the report; otherwise return empty arrays.`;
@@ -43,13 +38,7 @@ export async function POST(request: NextRequest) {
     const resolvedSubjects = [];
     for (const subject of analysis.subjects || []) {
       const match = await resolveSubject(subject.name);
-      resolvedSubjects.push({
-        ...subject,
-        subject_id: match?.id ?? null,
-        subject_code: match?.code ?? null,
-        normalized_subject_name: match?.name ?? null,
-        subject_match_confidence: match?.confidence ?? 0,
-      });
+      resolvedSubjects.push({ ...subject, subject_id: match?.id ?? null, subject_code: match?.code ?? null, normalized_subject_name: match?.name ?? null, subject_match_confidence: match?.confidence ?? 0 });
     }
     analysis.subjects = resolvedSubjects;
 
@@ -77,8 +66,28 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     console.error('Analyze error:', err);
     const raw = String(err?.message || '').toLowerCase();
-    const code = raw.includes('timeout') ? 'AI_TIMEOUT' : raw.includes('quota') || raw.includes('rate') ? 'AI_RATE_LIMIT' : raw.includes('api key') || raw.includes('unauthorized') ? 'AI_AUTH_ERROR' : 'MODEL_ERROR';
-    const message = code === 'AI_TIMEOUT' ? 'The AI report reader took too long to read the document.' : code === 'AI_RATE_LIMIT' ? 'The AI report reader is busy right now.' : code === 'AI_AUTH_ERROR' ? 'The AI report reader could not connect to its AI service.' : 'The AI report reader could not reliably understand this report.';
-    return fail(message, code, code === 'AI_TIMEOUT' || code === 'AI_RATE_LIMIT' ? 503 : 500);
+    const code = raw.includes('timeout')
+      ? 'AI_TIMEOUT'
+      : raw.includes('quota') || raw.includes('rate')
+        ? 'AI_RATE_LIMIT'
+        : raw.includes('503') || raw.includes('unavailable') || raw.includes('high demand') || raw.includes('overloaded')
+          ? 'AI_UNAVAILABLE'
+          : raw.includes('api key') || raw.includes('unauthorized')
+            ? 'AI_AUTH_ERROR'
+            : raw.includes('invalid json') || raw.includes('unexpected token')
+              ? 'AI_INVALID_RESPONSE'
+              : 'MODEL_ERROR';
+    const message = code === 'AI_TIMEOUT'
+      ? 'The AI report reader took too long to read the document.'
+      : code === 'AI_RATE_LIMIT'
+        ? 'The AI report reader is busy right now.'
+        : code === 'AI_UNAVAILABLE'
+          ? 'The AI report reader is temporarily unavailable. Please try again.'
+          : code === 'AI_AUTH_ERROR'
+            ? 'The AI report reader could not connect to its AI service.'
+            : code === 'AI_INVALID_RESPONSE'
+              ? 'The AI report reader returned an invalid result. Please try the report again.'
+              : 'The AI report reader could not reliably understand this report.';
+    return fail(message, code, code === 'AI_TIMEOUT' || code === 'AI_RATE_LIMIT' || code === 'AI_UNAVAILABLE' ? 503 : 500);
   }
 }
