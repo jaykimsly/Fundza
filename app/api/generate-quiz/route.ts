@@ -1,84 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateJson, isGeminiConfigured, quizSchema } from '@/lib/ai';
+import { retrieveKnowledge } from '@/lib/knowledge';
 
-const apiKey = process.env.GEMINI_API_KEY || '';
-const genAI = apiKey.length > 10 ? new GoogleGenerativeAI(apiKey) : null;
-
-function isLlmConfigured() {
-  return Boolean(genAI && !apiKey.includes('your-gemini'));
-}
-
-async function tryGenerate(modelName: string, prompt: string) {
-  if (!genAI) throw new Error('LLM not initialized');
-  const model = genAI.getGenerativeModel({ model: modelName });
-  return model.generateContent(prompt);
+function apiError(message: string, code: string, status: number) {
+  return NextResponse.json({ success: false, error: message, code }, { status });
 }
 
 export async function POST(request: NextRequest) {
   try {
-    if (!isLlmConfigured()) {
-      return NextResponse.json({ error: 'LLM not configured', code: 'NO_API_KEY' }, { status: 503 });
-    }
+    if (!isGeminiConfigured()) return apiError('The AI tutor is not configured yet.', 'NO_API_KEY', 503);
 
-    const body = await request.json();
-    const { topic, subject, studentLevel } = body;
+    let body: any;
+    try { body = await request.json(); } catch { return apiError('The request could not be read.', 'INVALID_REQUEST', 400); }
+    const { topic, subject, studentLevel, grade } = body || {};
+    if (!topic || !subject) return apiError('A subject and topic are required.', 'INVALID_REQUEST', 400);
 
-    if (!topic || !subject) {
-      return NextResponse.json({ error: 'Topic and subject required' }, { status: 400 });
-    }
+    const context = await retrieveKnowledge({ query: `${subject} ${topic} Grade ${grade || 12}`, matchCount: 6, grade: grade || null });
+    const sourceContext = context.map((row: any, index: number) => `[SOURCE ${index + 1}] ${row.title} | ${row.source_type} | ${row.subject_name || row.subject_code || ''} | Grade ${row.grade || ''}\n${row.content}`).join('\n\n');
+    const prompt = `You are Fundza, a South African school study assistant. Generate exactly 5 multiple-choice questions for ${subject}, topic "${topic}". The learner's current mastery is ${studentLevel || 50}%. Target Grade ${grade || 12}.\n\nUse the supplied Fundza knowledge when relevant. If it is insufficient, use general subject knowledge but do not pretend it came from a source. Never invent DBE paper provenance. Questions must be educationally valid, have one unambiguously correct answer, and include explanations.\n\nKnowledge context:\n${sourceContext || 'No matching Fundza knowledge was retrieved.'}`;
 
-    const prompt = `You are a South African matric ${subject} examiner. Generate 5 multiple choice questions for the topic: "${topic}"
-
-The student is currently at ${studentLevel || 50}% mastery. Generate questions that will help them improve. Include a mix of easy and medium questions.
-
-Each question must have:
-- Clear question text (use South African context, rand values, local examples)
-- 4 options labeled A, B, C, D
-- Correct answer (just the letter)
-- Detailed explanation with step-by-step working
-- Difficulty level
-
-Return ONLY valid JSON (no markdown) in this exact format:
-
-{
-  "questions": [
-    {
-      "question_text": "...",
-      "options": [{"label": "A", "text": "..."}, {"label": "B", "text": "..."}, {"label": "C", "text": "..."}, {"label": "D", "text": "..."}],
-      "correct_answer": "A",
-      "explanation": "Detailed explanation...",
-      "steps": ["Step 1: ...", "Step 2: ..."],
-      "difficulty": "medium"
-    }
-  ]
-}`;
-
-    // Deprecated Gemini 1.x models were causing 404s in production. These are
-    // current stable model IDs supported by the Gemini API.
-    const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
-    let result;
-    let lastError;
-
-    for (const modelName of models) {
-      try {
-        result = await tryGenerate(modelName, prompt);
-        break;
-      } catch (e: any) {
-        lastError = e;
-        if (e.message?.includes('404')) continue;
-        throw e;
-      }
-    }
-
-    if (!result) throw lastError || new Error('All models failed');
-
-    const text = result.response.text();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('AI did not return valid JSON');
-
-    return NextResponse.json({ success: true, questions: JSON.parse(jsonMatch[0]).questions });
+    const result = await generateJson<{ questions: unknown[] }>(prompt, quizSchema);
+    return NextResponse.json({ success: true, questions: result.questions, sources: context.map((x: any) => ({ title: x.title, source_type: x.source_type, similarity: x.similarity })) });
   } catch (err: any) {
     console.error('Quiz generation error:', err);
-    return NextResponse.json({ error: err.message || 'Quiz generation failed', code: 'MODEL_ERROR' }, { status: 500 });
+    const raw = String(err?.message || '').toLowerCase();
+    const code = raw.includes('timeout') || raw.includes('timed out') ? 'AI_TIMEOUT' : raw.includes('quota') || raw.includes('rate') ? 'AI_RATE_LIMIT' : raw.includes('api key') || raw.includes('unauthorized') ? 'AI_AUTH_ERROR' : 'MODEL_ERROR';
+    const message = code === 'AI_TIMEOUT' ? 'The AI tutor took too long to respond.' : code === 'AI_RATE_LIMIT' ? 'The AI tutor is busy right now. Please try again shortly.' : code === 'AI_AUTH_ERROR' ? 'The AI tutor could not authenticate with its service.' : 'The AI tutor could not create a reliable quiz this time.';
+    return apiError(message, code, code === 'AI_RATE_LIMIT' || code === 'AI_TIMEOUT' ? 503 : 500);
   }
 }
