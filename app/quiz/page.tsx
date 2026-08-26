@@ -3,6 +3,7 @@
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import Quiz from '@/components/Quiz';
+import { PageSkeleton } from '@/components/Skeleton';
 
 function QuizWrapper() {
   const searchParams = useSearchParams();
@@ -11,11 +12,5 @@ function QuizWrapper() {
 }
 
 export default function QuizPage() {
-  return (
-    <main className="container">
-      <Suspense fallback={<div className="card">Loading quiz...</div>}>
-        <QuizWrapper />
-      </Suspense>
-    </main>
-  );
+  return <main className="container"><Suspense fallback={<PageSkeleton />}><QuizWrapper /></Suspense></main>;
 }
