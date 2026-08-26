@@ -53,7 +53,9 @@ Return ONLY valid JSON (no markdown) in this exact format:
   ]
 }`;
 
-    const models = ['gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-pro'];
+    // Deprecated Gemini 1.x models were causing 404s in production. These are
+    // current stable model IDs supported by the Gemini API.
+    const models = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
     let result;
     let lastError;
 
