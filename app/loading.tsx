@@ -1,5 +1,5 @@
-import { PageSkeleton } from '@/components/Skeleton';
+import { BootLoader } from '@/components/Skeleton';
 
 export default function Loading() {
-  return <PageSkeleton variant="dashboard" />;
+  return <BootLoader />;
 }
