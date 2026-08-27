@@ -1,93 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateJson, generateMultimodalJson, isGeminiConfigured, reportSchema } from '@/lib/ai';
-import { resolveSubject } from '@/lib/knowledge';
+import { after } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase-server';
+import { processAnalysisJob } from '@/lib/report-analysis-worker';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-function fail(error: string, code: string, status: number) {
-  return NextResponse.json({ success: false, error, code }, { status });
-}
+const REPORT_BUCKET = 'report-documents';
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = new Set(['application/pdf','image/jpeg','image/png','image/webp','image/heic','image/heif']);
+
+function fail(error: string, code: string, status: number) { return NextResponse.json({ success: false, error, code }, { status }); }
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return fail('Please sign in before analysing a report.', 'AUTH_REQUIRED', 401);
-    if (!isGeminiConfigured()) return fail('The AI report reader is not configured yet.', 'NO_API_KEY', 503);
 
     let body: any;
     try { body = await request.json(); } catch { return fail('The report request could not be read.', 'INVALID_REQUEST', 400); }
-    const { fileData, mimeType, content, term, mode, studentId, fileName } = body || {};
+    const { storagePath, mimeType, content, term, mode, studentId, fileName } = body || {};
     if (!studentId) return fail('Your learner profile could not be identified.', 'INVALID_REQUEST', 400);
 
     const { data: student } = await supabase.from('students').select('id,auth_user_id,grade').eq('id', studentId).maybeSingle();
     if (!student || student.auth_user_id !== user.id) return fail('This report does not belong to the signed-in learner.', 'ACCESS_DENIED', 403);
 
-    const prompt = `You are Fundza's South African school-report extraction engine. Extract only facts explicitly present in the supplied report. Do not invent, infer or autocomplete subject names, percentages, comments, school names, learner names, grades or terms. If a field is not present, return null. Preserve the report's subject wording exactly in the name field. ${term ? `The uploader says this is ${term}, but prefer the document if it states a different term.` : ''}\n\nExtract the learner name, school, grade, term, overall performance and every subject with its percentage/comment. Weak and strong topics must only be included if explicitly supported by the report; otherwise return empty arrays.`;
-
-    let analysis: any;
-    if (mode === 'vision' && fileData) analysis = await generateMultimodalJson(prompt, fileData, mimeType || 'application/pdf', reportSchema);
-    else {
-      const safeContent = String(content || '').slice(0, 100000);
+    if (mode === 'text') {
+      const safeContent = String(content || '').trim();
       if (!safeContent) return fail('The report did not contain readable text.', 'DOCUMENT_CONTENT_MISSING', 400);
-      analysis = await generateJson(`${prompt}\n\nREPORT CONTENT:\n${safeContent}`, reportSchema);
+      if (safeContent.length > 100000) return fail('The pasted report is too long.', 'DOCUMENT_TOO_LARGE', 413);
+    } else {
+      if (!storagePath || !ALLOWED_MIME_TYPES.has(String(mimeType || ''))) return fail('The uploaded report is missing or has an unsupported file type.', 'INVALID_FILE', 400);
+      if (!String(storagePath).startsWith(`${user.id}/`)) return fail('The uploaded report could not be verified for this learner.', 'ACCESS_DENIED', 403);
+      const { data: blob, error } = await supabase.storage.from(REPORT_BUCKET).download(storagePath);
+      if (error || !blob) return fail('The uploaded report could not be retrieved. Please upload it again.', 'STORAGE_DOWNLOAD_FAILED', 502);
+      if (blob.size > MAX_FILE_SIZE) return fail('The report is too large. The maximum supported size is 10MB.', 'FILE_TOO_LARGE', 413);
     }
 
-    const resolvedSubjects = [];
-    for (const subject of analysis.subjects || []) {
-      const match = await resolveSubject(subject.name);
-      resolvedSubjects.push({ ...subject, subject_id: match?.id ?? null, subject_code: match?.code ?? null, normalized_subject_name: match?.name ?? null, subject_match_confidence: match?.confidence ?? 0 });
-    }
-    analysis.subjects = resolvedSubjects;
+    const id = crypto.randomUUID();
+    const idempotencyKey = `${user.id}:${studentId}:${storagePath || `text:${crypto.createHash('sha256').update(String(content || '')).digest('hex')}`}`;
+    const { data: existing } = await supabase.from('analysis_jobs')
+      .select('id,status,result,error_code,error_message,file_name,term,created_at,updated_at')
+      .eq('idempotency_key', idempotencyKey)
+      .in('status', ['queued','processing','retrying','completed'])
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (existing) return NextResponse.json({ success: true, queued: false, job: existing });
 
-    const { data: document, error: documentError } = await supabase.from('documents').insert({
-      student_id: studentId,
-      file_name: fileName || 'uploaded-report',
-      file_url: 'ai-analysis-input',
-      file_type: 'report',
-      document_date: new Date().toISOString().slice(0, 10),
-    }).select('id').maybeSingle();
-    if (documentError) throw documentError;
+    const { data: job, error: insertError } = await supabase.from('analysis_jobs').insert({
+      id, student_id: studentId, user_id: user.id, status: 'queued', file_name: fileName || 'uploaded-report', term: term || null,
+      storage_path: storagePath || null, mime_type: mimeType || null, mode: mode || 'file', source_text: mode === 'text' ? String(content || '') : null,
+      attempt_count: 0, max_attempts: 3, idempotency_key: idempotencyKey,
+    }).select('id,status,file_name,term,created_at,updated_at').single();
+    if (insertError || !job) { console.error('Analysis job creation failed:', insertError); return fail('The report could not be queued for analysis.', 'JOB_CREATE_FAILED', 500); }
 
-    if (document?.id) {
-      const { error: analysisError } = await supabase.from('document_analyses').insert({
-        document_id: document.id,
-        student_id: studentId,
-        overall_summary: analysis.overall_summary,
-        subject_analyses: analysis.subjects,
-        recommendations: analysis.overall_recommendations,
-      });
-      if (analysisError) throw analysisError;
-    }
+    after(async () => {
+      try { await processAnalysisJob(job.id); } catch (error) { console.error('Background report analysis failed:', error); }
+    });
 
-    return NextResponse.json({ success: true, analysis });
-  } catch (err: any) {
-    console.error('Analyze error:', err);
-    const raw = String(err?.message || '').toLowerCase();
-    const code = raw.includes('timeout')
-      ? 'AI_TIMEOUT'
-      : raw.includes('quota') || raw.includes('rate')
-        ? 'AI_RATE_LIMIT'
-        : raw.includes('503') || raw.includes('unavailable') || raw.includes('high demand') || raw.includes('overloaded')
-          ? 'AI_UNAVAILABLE'
-          : raw.includes('api key') || raw.includes('unauthorized')
-            ? 'AI_AUTH_ERROR'
-            : raw.includes('invalid json') || raw.includes('unexpected token')
-              ? 'AI_INVALID_RESPONSE'
-              : 'MODEL_ERROR';
-    const message = code === 'AI_TIMEOUT'
-      ? 'The AI report reader took too long to read the document.'
-      : code === 'AI_RATE_LIMIT'
-        ? 'The AI report reader is busy right now.'
-        : code === 'AI_UNAVAILABLE'
-          ? 'The AI report reader is temporarily unavailable. Please try again.'
-          : code === 'AI_AUTH_ERROR'
-            ? 'The AI report reader could not connect to its AI service.'
-            : code === 'AI_INVALID_RESPONSE'
-              ? 'The AI report reader returned an invalid result. Please try the report again.'
-              : 'The AI report reader could not reliably understand this report.';
-    return fail(message, code, code === 'AI_TIMEOUT' || code === 'AI_RATE_LIMIT' || code === 'AI_UNAVAILABLE' ? 503 : 500);
+    return NextResponse.json({ success: true, queued: true, job }, { status: 202 });
+  } catch (err) {
+    console.error('Analyze queue error:', err);
+    return fail('The report could not be queued for analysis. Please try again.', 'QUEUE_ERROR', 500);
   }
 }
