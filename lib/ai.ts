@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { createPartFromUri, createUserContent, GoogleGenAI } from '@google/genai';
 
 const apiKey = process.env.GEMINI_API_KEY || '';
 
@@ -17,7 +17,7 @@ function client() {
 
 function shouldFallbackModel(error: any) {
   const raw = `${error?.status ?? ''} ${error?.message ?? ''}`.toLowerCase();
-  return raw.includes('503') || raw.includes('unavailable') || raw.includes('high demand') || raw.includes('overloaded');
+  return raw.includes('429') || raw.includes('500') || raw.includes('502') || raw.includes('503') || raw.includes('504') || raw.includes('unavailable') || raw.includes('high demand') || raw.includes('overloaded') || raw.includes('rate limit');
 }
 
 async function withModelFallback<T>(operation: (model: string) => Promise<T>): Promise<T> {
@@ -56,12 +56,8 @@ export async function generateJson<T>(input: string, schema: Record<string, unkn
       model,
       contents: input,
       config: {
-        responseFormat: {
-          text: {
-            mimeType: 'application/json',
-            schema,
-          },
-        },
+        responseMimeType: 'application/json',
+        responseSchema: schema,
         thinkingConfig: { thinkingLevel: 'medium' },
       } as any,
     });
@@ -85,18 +81,60 @@ export async function generateMultimodalJson<T>(
         { inlineData: { data: fileData, mimeType } },
       ],
       config: {
-        responseFormat: {
-          text: {
-            mimeType: 'application/json',
-            schema,
-          },
-        },
+        responseMimeType: 'application/json',
+        responseSchema: schema,
         thinkingConfig: { thinkingLevel: 'medium' },
       } as any,
     });
 
     return parseJsonResponse<T>(response.text || '');
   });
+}
+
+export async function generateUploadedFileJson<T>(
+  prompt: string,
+  filePath: string,
+  mimeType: string,
+  schema: Record<string, unknown>,
+): Promise<T> {
+  const ai = client();
+  let uploadedFile: any = null;
+
+  try {
+    uploadedFile = await ai.files.upload({
+      file: filePath,
+      config: { mimeType },
+    });
+
+    if (!uploadedFile?.uri || !uploadedFile?.mimeType) {
+      throw new Error('Gemini Files API did not return a usable file reference');
+    }
+
+    return await withModelFallback(async (model) => {
+      const response = await ai.models.generateContent({
+        model,
+        contents: createUserContent([
+          prompt,
+          createPartFromUri(uploadedFile.uri, uploadedFile.mimeType),
+        ]),
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+          thinkingConfig: { thinkingLevel: 'medium' },
+        } as any,
+      });
+
+      return parseJsonResponse<T>(response.text || '');
+    });
+  } finally {
+    if (uploadedFile?.name) {
+      try {
+        await ai.files.delete({ name: uploadedFile.name });
+      } catch (cleanupError) {
+        console.warn('Gemini file cleanup failed:', cleanupError);
+      }
+    }
+  }
 }
 
 export async function embedText(text: string, title?: string) {
