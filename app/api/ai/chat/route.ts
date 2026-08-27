@@ -4,19 +4,29 @@ import { retrieveKnowledge } from '@/lib/knowledge';
 import { getSupabaseServer } from '@/lib/supabase-server';
 
 const answerSchema = { type: 'object', properties: { answer: { type: 'string' }, confidence: { type: 'string', enum: ['high', 'medium', 'low'] }, sources: { type: 'array', items: { type: 'integer' } } }, required: ['answer', 'confidence', 'sources'] };
-function fail(error: string, code: string, status: number) { return NextResponse.json({ success: false, error, code }, { status }); }
+
+function fail(error: string, code: string, status: number) {
+  return NextResponse.json({ success: false, error, code }, { status });
+}
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await getSupabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return fail('Please sign in before using the AI tutor.', 'AUTH_REQUIRED', 401);
+
     if (!isGeminiConfigured()) return fail('The AI tutor is not configured yet.', 'NO_API_KEY', 503);
+
     let body: any;
     try { body = await request.json(); } catch { return fail('The request could not be read.', 'INVALID_REQUEST', 400); }
     const { question, subjectCode, grade, history = [] } = body || {};
     if (!question?.trim()) return fail('Please type a question first.', 'INVALID_REQUEST', 400);
-    const supabase = await getSupabaseServer();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return fail('Please sign in before using the AI tutor.', 'AUTH_REQUIRED', 401);
-    const { data: student } = await supabase.from('students').select('full_name,grade,school_id,student_subjects(subject_id,subjects_catalog:subject_id(name,code))').eq('auth_user_id', user.id).maybeSingle();
+
+    const { data: student } = await supabase
+      .from('students')
+      .select('full_name,grade,school_id,student_subjects(subject_id,subjects_catalog:subject_id(name,code))')
+      .eq('auth_user_id', user.id)
+      .maybeSingle();
     const effectiveGrade = grade || student?.grade || 12;
     const context = await retrieveKnowledge({ query: question, matchCount: 8, subjectCode: subjectCode || null, grade: effectiveGrade });
     const sourceContext = context.map((row: any, index: number) => `[SOURCE ${index + 1}] ${row.title} | ${row.source_type} | ${row.subject_name || row.subject_code || ''} | Grade ${row.grade || ''} | ${row.paper || ''}\n${row.content}`).join('\n\n');
