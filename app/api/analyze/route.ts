@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { after } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase-server';
@@ -17,15 +18,12 @@ export async function POST(request: NextRequest) {
     const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return fail('Please sign in before analysing a report.', 'AUTH_REQUIRED', 401);
-
     let body: any;
     try { body = await request.json(); } catch { return fail('The report request could not be read.', 'INVALID_REQUEST', 400); }
     const { storagePath, mimeType, content, term, mode, studentId, fileName } = body || {};
     if (!studentId) return fail('Your learner profile could not be identified.', 'INVALID_REQUEST', 400);
-
     const { data: student } = await supabase.from('students').select('id,auth_user_id,grade').eq('id', studentId).maybeSingle();
     if (!student || student.auth_user_id !== user.id) return fail('This report does not belong to the signed-in learner.', 'ACCESS_DENIED', 403);
-
     if (mode === 'text') {
       const safeContent = String(content || '').trim();
       if (!safeContent) return fail('The report did not contain readable text.', 'DOCUMENT_CONTENT_MISSING', 400);
@@ -37,30 +35,13 @@ export async function POST(request: NextRequest) {
       if (error || !blob) return fail('The uploaded report could not be retrieved. Please upload it again.', 'STORAGE_DOWNLOAD_FAILED', 502);
       if (blob.size > MAX_FILE_SIZE) return fail('The report is too large. The maximum supported size is 10MB.', 'FILE_TOO_LARGE', 413);
     }
-
     const id = crypto.randomUUID();
     const idempotencyKey = `${user.id}:${studentId}:${storagePath || `text:${crypto.createHash('sha256').update(String(content || '')).digest('hex')}`}`;
-    const { data: existing } = await supabase.from('analysis_jobs')
-      .select('id,status,result,error_code,error_message,file_name,term,created_at,updated_at')
-      .eq('idempotency_key', idempotencyKey)
-      .in('status', ['queued','processing','retrying','completed'])
-      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const { data: existing } = await supabase.from('analysis_jobs').select('id,status,result,error_code,error_message,file_name,term,created_at,updated_at').eq('idempotency_key', idempotencyKey).in('status', ['queued','processing','retrying','completed']).order('created_at', { ascending: false }).limit(1).maybeSingle();
     if (existing) return NextResponse.json({ success: true, queued: false, job: existing });
-
-    const { data: job, error: insertError } = await supabase.from('analysis_jobs').insert({
-      id, student_id: studentId, user_id: user.id, status: 'queued', file_name: fileName || 'uploaded-report', term: term || null,
-      storage_path: storagePath || null, mime_type: mimeType || null, mode: mode || 'file', source_text: mode === 'text' ? String(content || '') : null,
-      attempt_count: 0, max_attempts: 3, idempotency_key: idempotencyKey,
-    }).select('id,status,file_name,term,created_at,updated_at').single();
+    const { data: job, error: insertError } = await supabase.from('analysis_jobs').insert({ id, student_id: studentId, user_id: user.id, status:'queued', file_name:fileName || 'uploaded-report', term:term || null, storage_path:storagePath || null, mime_type:mimeType || null, mode:mode || 'file', source_text:mode === 'text' ? String(content || '') : null, attempt_count:0, max_attempts:3, idempotency_key:idempotencyKey }).select('id,status,file_name,term,created_at,updated_at').single();
     if (insertError || !job) { console.error('Analysis job creation failed:', insertError); return fail('The report could not be queued for analysis.', 'JOB_CREATE_FAILED', 500); }
-
-    after(async () => {
-      try { await processAnalysisJob(job.id); } catch (error) { console.error('Background report analysis failed:', error); }
-    });
-
-    return NextResponse.json({ success: true, queued: true, job }, { status: 202 });
-  } catch (err) {
-    console.error('Analyze queue error:', err);
-    return fail('The report could not be queued for analysis. Please try again.', 'QUEUE_ERROR', 500);
-  }
+    after(async () => { try { await processAnalysisJob(job.id); } catch (error) { console.error('Background report analysis failed:', error); } });
+    return NextResponse.json({ success:true, queued:true, job }, { status:202 });
+  } catch (err) { console.error('Analyze queue error:', err); return fail('The report could not be queued for analysis. Please try again.', 'QUEUE_ERROR', 500); }
 }
