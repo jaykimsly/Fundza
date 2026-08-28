@@ -58,6 +58,13 @@ function validateResults(input: any) {
   })).filter((row: any) => row.subject_original.length > 0 && (row.mark === null || (row.mark >= 0 && row.mark <= Math.max(100, row.mark_denominator || 100))));
 }
 
+function percentageFor(row: any): number | null {
+  if (row.mark === null) return null;
+  if (row.mark_type === 'percentage' || row.mark_type === 'mark_out_of_100') return row.mark;
+  if (row.mark_type === 'mark_out_of_other' && row.mark_denominator && row.mark_denominator > 0) return Number(((row.mark / row.mark_denominator) * 100).toFixed(2));
+  return null;
+}
+
 export async function processAnalysisJob(jobId: string) {
   if (!isGeminiConfigured()) { await setJob(jobId,{status:'failed',error_code:'NO_API_KEY',error_message:'The AI report reader is not configured.',completed_at:new Date().toISOString()}); return; }
   const job = await claimJob(jobId); if (!job) return;
@@ -92,15 +99,43 @@ export async function processAnalysisJob(jobId: string) {
     for (const result of results) {
       let match: any = null;
       try { match = await resolveSubject(result.subject_original); } catch (e) { console.warn('Subject matching failed',result.subject_original,e); }
-      matchedResults.push({ ...result, subject_id:match?.id ?? null, subject_code:match?.code ?? null, normalized_subject_name:match?.name ?? null, subject_match_confidence:match?.confidence ?? 0 });
+      const percentage = percentageFor(result);
+      matchedResults.push({
+        name: result.subject_original,
+        subject_original: result.subject_original,
+        percentage,
+        mark: result.mark,
+        mark_type: result.mark_type,
+        mark_denominator: result.mark_denominator,
+        level: result.level,
+        comment: null,
+        source_text: result.source_text,
+        confidence: result.confidence,
+        subject_id: match?.id ?? null,
+        subject_code: match?.code ?? null,
+        normalized_subject_name: match?.name ?? null,
+        subject_match_confidence: match?.confidence ?? 0,
+        weak_topics: [],
+        strong_topics: [],
+      });
     }
 
+    const numericPercentages = matchedResults.map((r: any) => r.percentage).filter((v: any): v is number => typeof v === 'number' && v >= 0 && v <= 100);
+    const overallAverage = numericPercentages.length ? Number((numericPercentages.reduce((a:number,b:number)=>a+b,0) / numericPercentages.length).toFixed(2)) : null;
     const finalResult = {
       learner_name: extracted.learner_name ?? null,
+      student_name: extracted.learner_name ?? null,
       school_name: extracted.school_name ?? null,
       grade: extracted.grade ?? null,
       term: extracted.term ?? job.term ?? null,
       subjects: matchedResults,
+      results: matchedResults,
+      overall_average: overallAverage,
+      subjects_passed: null,
+      subjects_failed: null,
+      overall_summary: null,
+      teacher_comments: [],
+      overall_recommendations: [],
       extraction_warnings: Array.isArray(extracted.extraction_warnings) ? extracted.extraction_warnings : [],
       extracted_at: new Date().toISOString(),
     };
@@ -109,10 +144,7 @@ export async function processAnalysisJob(jobId: string) {
   } catch (err:any) {
     const code = classifyError(err);
     const retryable = RETRYABLE_CODES.has(code) && attempt < Math.min(Number(job.max_attempts || MAX_ATTEMPTS),MAX_ATTEMPTS);
-    if (retryable) {
-      await setJob(jobId,{status:'retrying',error_code:code,error_message:publicError(code),next_retry_at:new Date(Date.now()+backoffMs(attempt)).toISOString()});
-      return;
-    }
+    if (retryable) { await setJob(jobId,{status:'retrying',error_code:code,error_message:publicError(code),next_retry_at:new Date(Date.now()+backoffMs(attempt)).toISOString()}); return; }
     await setJob(jobId,{status:'failed',error_code:code,error_message:publicError(code),completed_at:new Date().toISOString()});
   } finally { if (tempFile) { try { await fs.unlink(tempFile); } catch {} } }
 }
