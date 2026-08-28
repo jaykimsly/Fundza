@@ -7,7 +7,7 @@ interface Props { studentId: string; onAnalysisComplete: (analysis: any, extract
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const REPORT_BUCKET = 'report-documents';
 const ALLOWED_MIME_TYPES = new Set(['application/pdf','image/jpeg','image/png','image/webp','image/heic','image/heif']);
-const ACTIVE = new Set(['queued','processing','retrying']);
+const ACTIVE = new Set(['queued','processing','extracting','validating','retrying']);
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 function safeName(name: string) { return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'report'; }
@@ -30,7 +30,7 @@ export default function DocumentUploader({ studentId, onAnalysisComplete }: Prop
     if (!job) return;
     setJobId(job.id); setJobStatus(job.status);
     if (job.status === 'queued') { setUploading(true); setProgress('Report queued. The AI reader will start it in the background.'); }
-    if (job.status === 'processing') { setUploading(true); setProgress('AI is reading your report in the background...'); }
+    if (job.status === 'processing' || job.status === 'extracting' || job.status === 'validating') { setUploading(true); setProgress('AI is reading your report in the background...'); }
     if (job.status === 'retrying') { setUploading(true); setProgress('The AI service is busy. Your report is being retried automatically...'); }
     if (job.status === 'completed' && !handledJobs.current.has(job.id)) {
       handledJobs.current.add(job.id); setUploading(false); setProgress('✓ Analysis complete!');
@@ -44,7 +44,13 @@ export default function DocumentUploader({ studentId, onAnalysisComplete }: Prop
   useEffect(() => {
     let alive = true;
     const recover = async () => {
-      const { data } = await supabase.from('analysis_jobs').select('*').eq('student_id', studentId).in('status', ['queued','processing','retrying']).order('created_at', { ascending: false }).limit(1);
+      const { data, error: recoveryError } = await supabase.from('analysis_jobs')
+        .select('*')
+        .eq('student_id', studentId)
+        .in('status', ['queued','processing','extracting','validating','retrying','completed'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (recoveryError) console.error('Analysis job recovery failed:', recoveryError);
       if (alive && data?.[0]) applyJob(data[0]);
     };
     void recover();
@@ -78,7 +84,7 @@ export default function DocumentUploader({ studentId, onAnalysisComplete }: Prop
     setUploading(true);
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) { setError({ code:'AUTH_REQUIRED', message:'Your session has expired. Please sign in again.' }); return; }
+      if (authError || !user) { setUploading(false); setError({ code:'AUTH_REQUIRED', message:'Your session has expired. Please sign in again.' }); return; }
       let storagePath: string | null = null;
       if (selectedFile) { setProgress('Uploading your report securely...'); storagePath = await uploadToStorage(selectedFile, user.id); }
       else setProgress('Queueing your report text...');
