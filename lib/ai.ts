@@ -1,4 +1,5 @@
 // Gemini helpers used by report analysis, quizzes, and embeddings.
+// Build guard: keep report upload helpers exported for the background analysis worker.
 import { GoogleGenAI } from '@google/genai';
 
 const apiKey = process.env.GEMINI_API_KEY || '';
