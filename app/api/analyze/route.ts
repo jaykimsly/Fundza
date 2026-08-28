@@ -36,9 +36,24 @@ export async function POST(request: NextRequest) {
       if (blob.size > MAX_FILE_SIZE) return fail('The report is too large. The maximum supported size is 10MB.', 'FILE_TOO_LARGE', 413);
     }
     const id = crypto.randomUUID();
-    const idempotencyKey = `${user.id}:${studentId}:${storagePath || `text:${crypto.createHash('sha256').update(String(content || '')).digest('hex')}`}`;
-    const { data: existing } = await supabase.from('analysis_jobs').select('id,status,result,error_code,error_message,file_name,term,created_at,updated_at').eq('idempotency_key', idempotencyKey).in('status', ['queued','processing','retrying','completed']).order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (existing) return NextResponse.json({ success: true, queued: false, job: existing });
+    const idempotencyKey = `${user.id}:${studentId}:${storagePath || `text:${crypto.createHash('sha256').update(String(content || '').trim()).digest('hex')}`}`;
+    const { data: existing } = await supabase.from('analysis_jobs').select('id,status,result,error_code,error_message,file_name,term,created_at,updated_at').eq('idempotency_key', idempotencyKey).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (existing) {
+      if (['queued','processing','extracting','validating','retrying','completed'].includes(existing.status)) {
+        return NextResponse.json({ success: true, queued: false, job: existing });
+      }
+      if (existing.status === 'failed') {
+        const { data: retried, error: retryError } = await supabase.from('analysis_jobs')
+          .update({ status:'queued', result:null, error_code:null, error_message:null, attempt_count:0, next_retry_at:null, started_at:null, heartbeat_at:null, completed_at:null, file_name:fileName || existing.file_name || 'uploaded-report', term:term || existing.term || null })
+          .eq('id', existing.id)
+          .eq('status', 'failed')
+          .select('id,status,result,error_code,error_message,file_name,term,created_at,updated_at')
+          .maybeSingle();
+        if (retryError || !retried) return fail('The failed report could not be queued for retry.', 'JOB_RETRY_FAILED', 500);
+        after(async () => { try { await processAnalysisJob(retried.id); } catch (error) { console.error('Background report retry failed:', error); } });
+        return NextResponse.json({ success:true, queued:true, retried:true, job:retried }, { status:202 });
+      }
+    }
     const { data: job, error: insertError } = await supabase.from('analysis_jobs').insert({ id, student_id: studentId, user_id: user.id, status:'queued', file_name:fileName || 'uploaded-report', term:term || null, storage_path:storagePath || null, mime_type:mimeType || null, mode:mode || 'file', source_text:mode === 'text' ? String(content || '') : null, attempt_count:0, max_attempts:3, idempotency_key:idempotencyKey }).select('id,status,file_name,term,created_at,updated_at').single();
     if (insertError || !job) { console.error('Analysis job creation failed:', insertError); return fail('The report could not be queued for analysis.', 'JOB_CREATE_FAILED', 500); }
     after(async () => { try { await processAnalysisJob(job.id); } catch (error) { console.error('Background report analysis failed:', error); } });
