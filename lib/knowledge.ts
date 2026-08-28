@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { embedQuery, embedText, isGeminiEmbeddingConfigured } from '@/lib/ai';
+import { embedQuery, embedText } from '@/lib/ai';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export type KnowledgeMetadata = {
@@ -80,64 +80,7 @@ export async function ingestKnowledgeDocument(text: string, meta: KnowledgeMetad
   return { documentId: document.id, chunksCreated: chunks.length, duplicate: false };
 }
 
-function lexicalTokens(value: string) {
-  return new Set(normalizeSubjectName(value).split(' ').filter((token) => token.length >= 3));
-}
-
-function lexicalSimilarity(query: string, content: string) {
-  const queryTokens = lexicalTokens(query);
-  const contentTokens = lexicalTokens(content);
-  if (!queryTokens.size || !contentTokens.size) return 0;
-  let matches = 0;
-  for (const token of queryTokens) if (contentTokens.has(token)) matches += 1;
-  return matches / queryTokens.size;
-}
-
-async function retrieveKnowledgeLexically(options: { query: string; matchCount?: number; subjectCode?: string | null; grade?: number | null }) {
-  const supabase = getSupabaseAdmin();
-  let query = supabase
-    .from('knowledge_chunks')
-    .select('content,token_count,metadata,knowledge_documents(title,source_type,subject_code,subject_name,grade,paper,exam_year,exam_session)')
-    .limit(300);
-
-  if (options.grade) query = query.eq('knowledge_documents.grade', options.grade);
-  if (options.subjectCode) query = query.eq('knowledge_documents.subject_code', options.subjectCode);
-
-  const { data, error } = await query;
-  if (error) throw error;
-
-  return (data ?? [])
-    .map((row: any) => {
-      const doc = row.knowledge_documents || {};
-      const similarity = lexicalSimilarity(options.query, `${doc.title || ''} ${doc.subject_name || ''} ${row.content || ''}`);
-      return {
-        title: doc.title,
-        source_type: doc.source_type,
-        subject_code: doc.subject_code,
-        subject_name: doc.subject_name,
-        grade: doc.grade,
-        paper: doc.paper,
-        exam_year: doc.exam_year,
-        exam_session: doc.exam_session,
-        content: row.content,
-        token_count: row.token_count,
-        metadata: row.metadata,
-        similarity,
-      };
-    })
-    .filter((row: any) => row.similarity > 0)
-    .sort((a: any, b: any) => b.similarity - a.similarity)
-    .slice(0, options.matchCount ?? 8);
-}
-
 export async function retrieveKnowledge(options: { query: string; matchCount?: number; subjectCode?: string | null; grade?: number | null }) {
-  // Keep ordinary learner requests free of embedding-token charges. Semantic
-  // retrieval remains available only when explicitly enabled.
-  const useGeminiEmbeddings = process.env.AI_USE_GEMINI_EMBEDDINGS === 'true';
-  if (!useGeminiEmbeddings || !isGeminiEmbeddingConfigured()) {
-    return retrieveKnowledgeLexically(options);
-  }
-
   const supabase = getSupabaseAdmin();
   const embedding = await embedQuery(options.query);
   const { data, error } = await supabase.rpc('match_knowledge_chunks', {
