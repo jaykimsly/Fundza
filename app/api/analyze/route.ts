@@ -26,6 +26,7 @@ function fail(error: string, code: string, status: number) {
 
 function classifyError(err: any) {
   const raw = String(err?.message || '').toLowerCase();
+  if (raw.includes('pdf_gateway_unsupported')) return 'PDF_ZERO_COST_UNSUPPORTED';
   if (raw.includes('timeout') || raw.includes('deadline')) return 'AI_TIMEOUT';
   if (raw.includes('quota') || raw.includes('rate') || raw.includes('429')) return 'AI_RATE_LIMIT';
   if (raw.includes('401') || raw.includes('403') || raw.includes('api key') || raw.includes('unauthorized')) return 'AI_AUTH_ERROR';
@@ -36,6 +37,7 @@ function classifyError(err: any) {
 
 function errorMessage(code: string) {
   switch (code) {
+    case 'PDF_ZERO_COST_UNSUPPORTED': return 'PDF report analysis is disabled in zero-cost AI mode because the selected free Gateway model does not advertise PDF input. Upload the report as JPG, PNG or WebP for AI analysis.';
     case 'AI_TIMEOUT': return 'The AI report reader took too long to read the document.';
     case 'AI_RATE_LIMIT': return 'The AI report reader is busy right now. Please try again shortly.';
     case 'AI_UNAVAILABLE': return 'The AI report reader is temporarily unavailable. Please try again.';
@@ -152,7 +154,7 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     console.error('Analyze error:', err);
     const code = classifyError(err);
-    const status = ['AI_TIMEOUT', 'AI_RATE_LIMIT', 'AI_UNAVAILABLE'].includes(code) ? 503 : 500;
+    const status = ['AI_TIMEOUT', 'AI_RATE_LIMIT', 'AI_UNAVAILABLE', 'PDF_ZERO_COST_UNSUPPORTED'].includes(code) ? 503 : 500;
     return fail(errorMessage(code), code, status);
   } finally {
     if (tempFile) {
