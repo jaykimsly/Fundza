@@ -10,7 +10,11 @@ const required: LegalDocumentType[] = ['terms', 'privacy', 'copyright', 'legal']
 
 export default function LegalAcceptPage() {
   const router = useRouter();
-  const [returnTo, setReturnTo] = useState('/');
+  const returnTo = useMemo(() => {
+    if (typeof window === 'undefined') return '/';
+    const requested = new URLSearchParams(window.location.search).get('returnTo');
+    return requested?.startsWith('/') ? requested : '/';
+  }, []);
   const [checked, setChecked] = useState<Record<LegalDocumentType, boolean>>({ terms: false, privacy: false, copyright: false, legal: false });
   const [understood, setUnderstood] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -19,10 +23,6 @@ export default function LegalAcceptPage() {
   const [emailWarning, setEmailWarning] = useState('');
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const requestedReturnTo = params.get('returnTo');
-    if (requestedReturnTo?.startsWith('/')) setReturnTo(requestedReturnTo);
-
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/login'); return; }
