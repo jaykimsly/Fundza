@@ -43,7 +43,6 @@ export default function AnalysisResults({ analysis, studentId }: Props) {
     setSaving(true);
 
     try {
-      // Try to match extracted subjects to catalog
       const { data: catalog } = await supabase.from('subjects_catalog').select('*');
       
       const updates = analysis.subjects.map((subj: SubjectExtracted) => {
@@ -76,7 +75,7 @@ export default function AnalysisResults({ analysis, studentId }: Props) {
   return (
     <div>
       <div className="card" style={{ background: '#0f172a', color: 'white' }}>
-        <h2 style={{ color: '#fbbf24', marginBottom: '0.75rem' }}>AI Analysis Results</h2>
+        <h2 style={{ color: '#fbbf24', marginBottom: '0.75rem' }}>Review Results</h2>
         <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>
           {analysis.student_name && `${analysis.student_name} • `}
           {analysis.school_name && `${analysis.school_name} • `}
@@ -142,7 +141,7 @@ export default function AnalysisResults({ analysis, studentId }: Props) {
 
       {analysis.overall_recommendations?.length > 0 && (
         <div className="card" style={{ background: '#fff7ed', border: '1px solid #fdba74' }}>
-          <h3 style={{ color: '#9a3412' }}>AI Recommendations</h3>
+          <h3>Recommendations</h3>
           <ol style={{ paddingLeft: '1.25rem', marginTop: '0.75rem', color: '#7c2d12', lineHeight: 1.8 }}>
             {analysis.overall_recommendations.map((r: string, i: number) => <li key={i}>{r}</li>)}
           </ol>
