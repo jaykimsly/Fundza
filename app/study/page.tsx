@@ -30,9 +30,9 @@ export default function StudyPage() {
 
   return (
     <main className="container">
-      <h1>Study Hub</h1>
+      <h1>Study</h1>
       <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>
-        Study from the subjects saved in your Fundza profile. The same subject list is used by Dashboard, Quiz, Exams and Progress.
+        Learn from the subjects saved in your Fundza profile, then put what you learn into practice.
       </p>
 
       <div className="card">
@@ -64,12 +64,12 @@ export default function StudyPage() {
       {!subjects.length && <div className="card"><p>No subjects are saved yet. Complete your profile first.</p><Link href="/profile/edit" className="btn">Set Up Subjects</Link></div>}
 
       <div style={{ marginTop: '2rem' }}>
-        <Link href="/quiz" className="btn">Go to Quiz</Link>
-        <Link href="/upload" className="btn btn-secondary" style={{ marginLeft: '0.5rem' }}>Upload Report</Link>
+        <Link href="/quiz" className="btn">Practice</Link>
+        <Link href="/upload" className="btn btn-secondary" style={{ marginLeft: '0.5rem' }}>Review Report</Link>
       </div>
 
       <nav className="nav">
-        <Link href="/">Dashboard</Link><Link href="/profile">Profile</Link><Link href="/quiz">Quiz</Link><Link href="/exams">Exams</Link><Link href="/progress">Progress</Link>
+        <Link href="/">Home</Link><Link href="/profile">Profile</Link><Link href="/quiz">Practice</Link><Link href="/exams">Exams</Link><Link href="/progress">Progress</Link>
       </nav>
     </main>
   );
