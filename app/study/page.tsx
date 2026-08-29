@@ -18,7 +18,7 @@ interface TopicRow {
   content: string | null;
 }
 
-function topicOrder(topic: TopicRow) {
+function topicOrder(topic: TopicRow): [number, number, string] {
   return [
     topic.term_number ?? Number.MAX_SAFE_INTEGER,
     topic.topic_number ?? Number.MAX_SAFE_INTEGER,
@@ -75,7 +75,7 @@ export default function StudyPage() {
         loadedTopics.sort((a, b) => {
           const [aTerm, aNumber, aName] = topicOrder(a);
           const [bTerm, bNumber, bName] = topicOrder(b);
-          return aTerm - bTerm || aNumber - bNumber || String(aName).localeCompare(String(bName));
+          return aTerm - bTerm || aNumber - bNumber || aName.localeCompare(bName);
         });
         setTopics(loadedTopics);
         setSelectedTopic(loadedTopics[0] || null);
