@@ -26,7 +26,7 @@ function QuizWrapper() {
     });
   }, [router]);
 
-  if (loading) return <AppLoader message="Loading your quiz subjects..." />;
+  if (loading) return <AppLoader message="Loading your practice subjects..." />;
   if (!subjects.length) return <div className="card"><h2>No subjects saved</h2><Link href="/profile/edit" className="btn">Set Up Profile</Link></div>;
 
   const selected = subjects.find(s => s.subjects_catalog?.code === requestedSubject) || subjects[0];
@@ -54,7 +54,7 @@ function QuizWrapper() {
 export default function QuizPage() {
   return (
     <main className="container">
-      <Suspense fallback={<div className="card">Loading quiz...</div>}>
+      <Suspense fallback={<div className="card">Loading practice...</div>}>
         <QuizWrapper />
       </Suspense>
     </main>
