@@ -26,7 +26,7 @@ export default function EnglishPage() {
       </div>
 
       <div className="card">
-        <h2>This Week's Focus</h2>
+        <h2>This Week&apos;s Focus</h2>
         <p style={{ color: '#475569' }}>
           Complete one past paper (2019–2023) under timed conditions. Mark yourself strictly using the memorandum.
           Target: push from 63% to 68% on your next assessment.
