@@ -53,8 +53,6 @@ export default function StudyPage() {
     if (!selected?.subject_id) return;
 
     let cancelled = false;
-    setTopicsLoading(true);
-    setTopicError(null);
 
     const loadTopics = async () => {
       try {
@@ -70,6 +68,9 @@ export default function StudyPage() {
         if (error) throw error;
         if (cancelled) return;
 
+        setTopicsLoading(false);
+        setTopicError(null);
+
         const loadedTopics = (data ?? []) as TopicRow[];
         loadedTopics.sort((a, b) => {
           const [aTerm, aNumber, aName] = topicOrder(a);
@@ -83,9 +84,8 @@ export default function StudyPage() {
         console.error('Study topics load error:', error);
         setTopics([]);
         setSelectedTopic(null);
+        setTopicsLoading(false);
         setTopicError('Topics could not be loaded right now. You can still use AI practice for this subject.');
-      } finally {
-        if (!cancelled) setTopicsLoading(false);
       }
     };
 
