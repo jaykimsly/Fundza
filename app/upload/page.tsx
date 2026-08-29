@@ -7,19 +7,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export default function UploadPage() {
-  const [studentId, setStudentId] = useState('');
+  const [studentId, setStudentId] = useState(() => typeof window === 'undefined' ? '' : localStorage.getItem('fundza_student_id') || '');
   const [analysis, setAnalysis] = useState(null);
   const [extractedSubjects, setExtractedSubjects] = useState<any[]>([]);
   const router = useRouter();
 
   useEffect(() => {
-    const id = localStorage.getItem('fundza_student_id');
-    if (!id) {
-      router.push('/setup');
-      return;
-    }
-    setStudentId(id);
-  }, [router]);
+    if (!studentId) router.push('/setup');
+  }, [router, studentId]);
 
   return (
     <main className="container">
