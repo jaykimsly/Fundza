@@ -3,13 +3,12 @@
 import { useEffect, useState } from 'react';
 
 export default function NetworkStatus() {
-  const [offline, setOffline] = useState(false);
+  const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine);
   const [reconnected, setReconnected] = useState(false);
 
   useEffect(() => {
     const down = () => { setOffline(true); setReconnected(false); };
     const up = () => { setOffline(false); setReconnected(true); window.setTimeout(() => setReconnected(false), 4000); };
-    setOffline(!navigator.onLine);
     window.addEventListener('offline', down);
     window.addEventListener('online', up);
     return () => { window.removeEventListener('offline', down); window.removeEventListener('online', up); };
