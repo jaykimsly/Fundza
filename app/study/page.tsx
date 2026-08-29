@@ -50,11 +50,7 @@ export default function StudyPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!selected?.subject_id) {
-      setTopics([]);
-      setSelectedTopic(null);
-      return;
-    }
+    if (!selected?.subject_id) return;
 
     let cancelled = false;
     setTopicsLoading(true);
@@ -97,16 +93,23 @@ export default function StudyPage() {
     return () => { cancelled = true; };
   }, [selected?.subject_id]);
 
+  const activeTopics = useMemo(
+    () => selected ? topics.filter(topic => topic.subject_id === selected.subject_id) : [],
+    [selected, topics],
+  );
+
+  const activeTopic = selectedTopic?.subject_id === selected?.subject_id ? selectedTopic : null;
+
   const topicGroups = useMemo(() => {
     const groups = new Map<string, TopicRow[]>();
-    for (const topic of topics) {
+    for (const topic of activeTopics) {
       const key = topic.term_number ? `Term ${topic.term_number}` : topic.paper || 'Topics';
       const group = groups.get(key) || [];
       group.push(topic);
       groups.set(key, group);
     }
     return Array.from(groups.entries());
-  }, [topics]);
+  }, [activeTopics]);
 
   if (loading) return <AppLoader message="Loading your study space..." />;
 
@@ -160,7 +163,7 @@ export default function StudyPage() {
             {topicsLoading && <p style={{ color: '#64748b', marginTop: '1rem' }}>Loading curriculum topics...</p>}
             {topicError && <div className="warning-box" style={{ marginTop: '1rem' }}>{topicError}</div>}
 
-            {!topicsLoading && !topics.length && !topicError && (
+            {!topicsLoading && !activeTopics.length && !topicError && (
               <div className="empty-state" style={{ marginTop: '1rem' }}>
                 <h3>No curriculum topics yet</h3>
                 <p>This subject is available for AI practice, but its topic material has not been loaded yet.</p>
@@ -177,7 +180,7 @@ export default function StudyPage() {
                         <button
                           key={topic.id}
                           onClick={() => setSelectedTopic(topic)}
-                          className={selectedTopic?.id === topic.id ? 'btn' : 'btn btn-secondary'}
+                          className={activeTopic?.id === topic.id ? 'btn' : 'btn btn-secondary'}
                           style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}
                         >
                           <span>{topic.topic_number ? `${topic.topic_number}. ` : ''}{topic.name}</span>
@@ -191,18 +194,18 @@ export default function StudyPage() {
             )}
           </section>
 
-          {selectedTopic && (
+          {activeTopic && (
             <section className="card" aria-labelledby="topic-heading">
               <p style={{ color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
                 Learning objective
               </p>
-              <h2 id="topic-heading">{selectedTopic.name}</h2>
+              <h2 id="topic-heading">{activeTopic.name}</h2>
               <p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>
-                {selectedTopic.paper || 'Curriculum topic'}{selectedTopic.term_number ? ` · Term ${selectedTopic.term_number}` : ''}
+                {activeTopic.paper || 'Curriculum topic'}{activeTopic.term_number ? ` · Term ${activeTopic.term_number}` : ''}
               </p>
 
-              {selectedTopic.content ? (
-                <div style={{ lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{selectedTopic.content}</div>
+              {activeTopic.content ? (
+                <div style={{ lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{activeTopic.content}</div>
               ) : (
                 <div className="empty-state">
                   <h3>Study material is not loaded yet</h3>
@@ -211,7 +214,7 @@ export default function StudyPage() {
               )}
 
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1.25rem' }}>
-                <Link href={`/quiz?topic=${encodeURIComponent(selectedTopic.id)}`} className="btn">
+                <Link href={`/quiz?topic=${encodeURIComponent(activeTopic.id)}`} className="btn">
                   Practise This Topic
                 </Link>
                 <Link href={`/quiz?subject=${encodeURIComponent(selected.subjects_catalog?.code || '')}`} className="btn btn-secondary">
@@ -227,7 +230,7 @@ export default function StudyPage() {
               Generate practice questions at your current level for {selected.subjects_catalog?.name}.
             </p>
             <AiQuizGenerator
-              topic={selectedTopic?.name || selected.subjects_catalog?.name || 'General revision'}
+              topic={activeTopic?.name || selected.subjects_catalog?.name || 'General revision'}
               subject={selected.subjects_catalog?.name || 'Subject'}
               studentLevel={Number(selected.current_percentage || 0)}
             />
