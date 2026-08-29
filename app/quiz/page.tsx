@@ -11,6 +11,7 @@ function QuizWrapper() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedSubject = searchParams.get('subject');
+  const requestedTopic = searchParams.get('topic');
   const [subjects, setSubjects] = useState<StudentSubjectWithCatalog[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -39,14 +40,18 @@ function QuizWrapper() {
         <p style={{ color: '#64748b', fontSize: '0.875rem' }}>Only subjects saved in your Fundza profile appear here.</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '1rem' }}>
           {subjects.map(subject => (
-            <Link key={subject.id} href={`/quiz?subject=${encodeURIComponent(subject.subjects_catalog?.code || '')}`} className={selected.id === subject.id ? 'btn' : 'btn btn-secondary'}>
+            <Link key={subject.id} href={`/quiz?subject=${encodeURIComponent(subject.subjects_catalog?.code || '')}`} className={selected.id === subject.id && !requestedTopic ? 'btn' : 'btn btn-secondary'}>
               {subject.subjects_catalog?.name}
             </Link>
           ))}
         </div>
       </div>
 
-      <Quiz topicId={null} subjectCode={selectedCode} subjectName={selected.subjects_catalog?.name || 'Subject'} />
+      <Quiz
+        topicId={requestedTopic}
+        subjectCode={requestedTopic ? undefined : selectedCode}
+        subjectName={selected.subjects_catalog?.name || 'Subject'}
+      />
     </>
   );
 }
