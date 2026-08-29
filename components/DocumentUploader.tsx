@@ -29,15 +29,15 @@ export default function DocumentUploader({ studentId, onAnalysisComplete }: Prop
   const applyJob = useCallback((job: any) => {
     if (!job) return;
     setJobId(job.id); setJobStatus(job.status);
-    if (job.status === 'queued') { setUploading(true); setProgress('Report queued. The AI reader will start it in the background.'); }
-    if (job.status === 'processing' || job.status === 'extracting' || job.status === 'validating') { setUploading(true); setProgress('AI is reading your report in the background...'); }
-    if (job.status === 'retrying') { setUploading(true); setProgress('The AI service is busy. Your report is being retried automatically...'); }
+    if (job.status === 'queued') { setUploading(true); setProgress('Report queued. Review will start in the background.'); }
+    if (job.status === 'processing' || job.status === 'extracting' || job.status === 'validating') { setUploading(true); setProgress('Your report is being reviewed in the background...'); }
+    if (job.status === 'retrying') { setUploading(true); setProgress('Review service is busy. Your report is being retried automatically...'); }
     if (job.status === 'completed' && !handledJobs.current.has(job.id)) {
-      handledJobs.current.add(job.id); setUploading(false); setProgress('✓ Analysis complete!');
+      handledJobs.current.add(job.id); setUploading(false); setProgress('✓ Review complete!');
       if (job.result) onAnalysisComplete(job.result, job.result.subjects);
     }
     if (job.status === 'failed') {
-      setUploading(false); setProgress(''); setError({ code: job.error_code || 'ANALYSIS_FAILED', message: job.error_message || 'The report could not be analysed.' });
+      setUploading(false); setProgress(''); setError({ code: job.error_code || 'REVIEW_FAILED', message: job.error_message || 'The report could not be reviewed.' });
     }
   }, [onAnalysisComplete]);
 
@@ -50,7 +50,7 @@ export default function DocumentUploader({ studentId, onAnalysisComplete }: Prop
         .in('status', ['queued','processing','extracting','validating','retrying','completed'])
         .order('created_at', { ascending: false })
         .limit(1);
-      if (recoveryError) console.error('Analysis job recovery failed:', recoveryError);
+      if (recoveryError) console.error('Review job recovery failed:', recoveryError);
       if (alive && data?.[0]) applyJob(data[0]);
     };
     void recover();
@@ -90,10 +90,10 @@ export default function DocumentUploader({ studentId, onAnalysisComplete }: Prop
       else setProgress('Queueing your report text...');
       const res = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ storagePath, mimeType:selectedFile?.type || null, fileName:selectedFile?.name || 'pasted-text', content:selectedFile ? undefined : textContent, term, mode:selectedFile ? 'file' : 'text', studentId }) });
       const data = await res.json().catch(() => null);
-      if (!res.ok || data?.error) { setUploading(false); setError({ code:data?.code || 'API_ERROR', message:data?.error || 'The report could not be queued for analysis.' }); return; }
-      if (!data?.job?.id) { setUploading(false); setError({ code:'JOB_ID_MISSING', message:'The report was received but no background job was created.' }); return; }
+      if (!res.ok || data?.error) { setUploading(false); setError({ code:data?.code || 'API_ERROR', message:data?.error || 'The report could not be queued for review.' }); return; }
+      if (!data?.job?.id) { setUploading(false); setError({ code:'JOB_ID_MISSING', message:'The report was received but no background review was created.' }); return; }
       applyJob(data.job);
-    } catch (err) { console.error('Report queue error:', err); setUploading(false); setError({ code:'NETWORK_ERROR', message:'The report could not be uploaded. Check your connection and try again.' }); }
+    } catch (err) { console.error('Report review queue error:', err); setUploading(false); setError({ code:'NETWORK_ERROR', message:'The report could not be uploaded. Check your connection and try again.' }); }
   };
 
   const clear = () => { setFileName(''); setSelectedFile(null); setTextContent(''); setProgress(''); setError(null); setJobId(null); setJobStatus(null); if (cameraRef.current) cameraRef.current.value=''; if (fileRef.current) fileRef.current.value=''; };
@@ -105,9 +105,9 @@ export default function DocumentUploader({ studentId, onAnalysisComplete }: Prop
       <div style={{display:'flex',gap:'0.75rem',marginBottom:'1rem',flexWrap:'wrap'}}><button onClick={()=>cameraRef.current?.click()} disabled={busy} style={{flex:1,padding:'0.875rem',background:'#0f172a',color:'white',border:'none',borderRadius:'8px'}}>Take Photo</button><input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={e=>{const f=e.target.files?.[0];if(f)handleFile(f)}} style={{display:'none'}}/><button onClick={()=>fileRef.current?.click()} disabled={busy} style={{flex:1,padding:'0.875rem',background:'white',color:'#0f172a',border:'1px solid #e2e8f0',borderRadius:'8px'}}>Choose File</button><input ref={fileRef} type="file" accept="image/*,.pdf" onChange={e=>{const f=e.target.files?.[0];if(f)handleFile(f)}} style={{display:'none'}}/></div>
       <label style={{fontSize:'0.8rem',color:'#64748b',fontWeight:500}}>Or paste report text:</label><textarea value={textContent} onChange={e=>{setSelectedFile(null);setFileName('');setTextContent(e.target.value)}} placeholder="Copy and paste your report text here..." rows={4} disabled={busy} style={{width:'100%',padding:'0.75rem',borderRadius:'8px',border:'1px solid #e2e8f0',fontSize:'0.9375rem',marginTop:'0.375rem',resize:'vertical'}}/>
       {fileName&&<div style={{marginTop:'0.75rem',padding:'0.75rem',background:'#f8fafc',borderRadius:'8px',fontSize:'0.875rem',display:'flex',justifyContent:'space-between'}}><span>{fileName} ({term})</span><button onClick={clear} disabled={busy} style={{background:'none',border:'none',color:'#dc2626'}}>Remove</button></div>}
-      <button onClick={analyze} disabled={busy||(!selectedFile&&!textContent.trim())} className="btn" style={{width:'100%',marginTop:'1rem',opacity:busy||(!selectedFile&&!textContent.trim())?0.6:1}}>{busy?'Analysis running in background...':'Analyze My Report'}</button>
+      <button onClick={analyze} disabled={busy||(!selectedFile&&!textContent.trim())} className="btn" style={{width:'100%',marginTop:'1rem',opacity:busy||(!selectedFile&&!textContent.trim())?0.6:1}}>{busy?'Review running in background...':'Review My Report'}</button>
       {progress&&<div style={{marginTop:'0.75rem',padding:'0.75rem',background:'#eff6ff',borderRadius:'8px',color:'#1e40af',fontSize:'0.875rem',textAlign:'center'}}>{progress}{jobId&&<div style={{fontSize:'0.75rem',marginTop:'0.35rem',opacity:0.75}}>Job {jobId.slice(0,8)} · {jobStatus}</div>}</div>}
-      {error&&<div style={{marginTop:'0.75rem',padding:'1rem',borderRadius:'8px',background:'#fef2f2',border:'1px solid #fecaca'}}><p style={{fontWeight:600,color:'#991b1b'}}>Report Upload Error</p><p style={{color:'#7f1d1d',fontSize:'0.875rem'}}>{error.message}</p></div>}
+      {error&&<div style={{marginTop:'0.75rem',padding:'1rem',borderRadius:'8px',background:'#fef2f2',border:'1px solid #fecaca'}}><p style={{fontWeight:600,color:'#991b1b'}}>Report Review Error</p><p style={{color:'#7f1d1d',fontSize:'0.875rem'}}>{error.message}</p></div>}
     </div>
   </div>;
 }
