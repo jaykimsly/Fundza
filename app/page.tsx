@@ -96,12 +96,12 @@ export default function Dashboard() {
 
       <ExamCountdown />
 
-      <div className="card"><h2>Today's Study Plan</h2><p style={{ color: '#64748b', marginBottom: '1rem' }}>Focus on your weakest subjects first. Every mark counts toward your {profile?.grades?.grade_number === 12 ? 'final NSC' : 'promotion'}.</p><Link href="/study" className="btn">Start Studying</Link><Link href="/upload" className="btn btn-secondary" style={{ marginLeft: '0.5rem' }}>Analyze Report</Link></div>
+      <div className="card"><h2>Today's Study Plan</h2><p style={{ color: '#64748b', marginBottom: '1rem' }}>Focus on your weakest subjects first. Every mark counts toward your {profile?.grades?.grade_number === 12 ? 'final NSC' : 'promotion'}.</p><Link href="/study" className="btn">Start Studying</Link><Link href="/upload" className="btn btn-secondary" style={{ marginLeft: '0.5rem' }}>Review Report</Link></div>
 
       <h2 style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>Your Subjects</h2>
       <div className="grid grid-2">{sortedSubjects.map(s => <div key={s.id} className="card" style={{ borderLeft: `4px solid ${getPriorityColor(s.priority)}` }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}><h3 style={{ fontSize: '1rem' }}>{s.subjects_catalog?.name}</h3><span style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: getPriorityColor(s.priority), fontWeight: 600 }}>{s.priority}</span></div><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#64748b', marginBottom: '0.25rem' }}><span>Current: <strong>{s.current_percentage}%</strong></span><span>Target: <strong>{s.target_percentage}%</strong></span></div><ProgressBar current={s.current_percentage} target={s.target_percentage} color={getPriorityColor(s.priority)} /><div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#64748b' }}>Gap: {s.target_percentage - s.current_percentage} points • Level {getLevel(s.current_percentage)}</div></div>)}</div>
 
-      <nav className="nav"><Link href="/profile">Profile</Link><Link href="/study">Study</Link><Link href="/quiz">Quiz</Link><Link href="/exams">Exams</Link><Link href="/progress">Progress</Link><Link href="/upload">Analyze</Link></nav>
+      <nav className="nav"><Link href="/profile">Profile</Link><Link href="/study">Study</Link><Link href="/quiz">Practice</Link><Link href="/exams">Exams</Link><Link href="/progress">Progress</Link><Link href="/upload">Review</Link></nav>
     </main>
   );
 }
