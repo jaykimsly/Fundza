@@ -197,7 +197,7 @@ export default function LoginPage() {
       </div>
 
       <p style={{ textAlign: 'center', color: '#64748b', fontSize: '0.8rem', marginTop: '1.5rem' }}>
-        By logging in, you agree to Fundza's student data policy.
+        By logging in, you agree to Fundza&apos;s student data policy.
       </p>
     </main>
   );
