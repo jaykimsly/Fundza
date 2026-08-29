@@ -81,7 +81,7 @@ export default function Dashboard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
         <div>
           <p style={{ color: '#64748b', fontSize: '0.75rem', marginBottom: '0.25rem' }}>YOUR LEARNING SPACE</p>
-          <h1 style={{ fontSize: '1.5rem', marginBottom: 0 }}>{profile?.full_name?.toUpperCase()}'S HUB</h1>
+          <h1 style={{ fontSize: '1.5rem', marginBottom: 0 }}>{profile?.full_name?.toUpperCase()}&apos;S HUB</h1>
         </div>
         <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.8rem', cursor: 'pointer' }}>Logout</button>
       </div>
