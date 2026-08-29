@@ -6,10 +6,10 @@ import { usePathname } from 'next/navigation';
 const items = [
   { href: '/', label: 'Home', icon: '⌂' },
   { href: '/study', label: 'Study', icon: '▣' },
-  { href: '/quiz', label: 'Quiz', icon: '✓' },
+  { href: '/quiz', label: 'Practice', icon: '✓' },
   { href: '/exams', label: 'Exams', icon: '◷' },
   { href: '/progress', label: 'Progress', icon: '↗' },
-  { href: '/upload', label: 'Analyze', icon: '↑' },
+  { href: '/upload', label: 'Review', icon: '↑' },
 ];
 
 export default function AppNav() {
