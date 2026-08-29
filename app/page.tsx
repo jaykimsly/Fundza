@@ -68,24 +68,52 @@ export default function Dashboard() {
     const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     return (order[a.priority] ?? 2) - (order[b.priority] ?? 2);
   });
+  const prioritySubject = sortedSubjects[0];
   const english = subjects.find(s => s.subjects_catalog?.code?.includes('ENG'));
   const maths = subjects.find(s => s.subjects_catalog?.code?.includes('MATH'));
+  const grade = profile?.grades?.grade_number;
+  const pathway = profile?.career_pathway === 'university' ? 'University track' : profile?.career_pathway === 'college' ? 'College track' : 'Open options';
 
   if (loading) return <AppLoader message="Loading your study space..." />;
 
   return (
     <main className="container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-        <h1 style={{ fontSize: '1.5rem' }}>{profile?.full_name?.toUpperCase()}'S HUB</h1>
+        <div>
+          <p style={{ color: '#64748b', fontSize: '0.75rem', marginBottom: '0.25rem' }}>YOUR LEARNING SPACE</p>
+          <h1 style={{ fontSize: '1.5rem', marginBottom: 0 }}>{profile?.full_name?.toUpperCase()}'S HUB</h1>
+        </div>
         <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.8rem', cursor: 'pointer' }}>Logout</button>
       </div>
-      <p style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: '1.5rem' }}>Grade {profile?.grades?.grade_number} • {profile?.schools?.name} • {profile?.career_pathway === 'university' ? 'University track' : profile?.career_pathway === 'college' ? 'College track' : 'Open options'}</p>
+      <p style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: '1.5rem' }}>Grade {grade} • {profile?.schools?.name} • {pathway}</p>
+
+      <section className="card" aria-labelledby="today-heading">
+        <p style={{ color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.35rem' }}>Today</p>
+        <h2 id="today-heading" style={{ marginBottom: '0.5rem' }}>What should I do today?</h2>
+        {prioritySubject ? (
+          <>
+            <p style={{ color: '#475569', marginBottom: '1rem' }}>
+              Start with <strong>{prioritySubject.subjects_catalog?.name}</strong>. It is currently your highest-priority subject, with a {Math.max(0, Number(prioritySubject.target_percentage || 0) - Number(prioritySubject.current_percentage || 0))}-point gap to your target.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <Link href={`/quiz?subject=${encodeURIComponent(prioritySubject.subjects_catalog?.code || '')}`} className="btn">Start Practice</Link>
+              <Link href="/study" className="btn btn-secondary">Study a Topic</Link>
+              <Link href="/progress" className="btn btn-secondary">Review Progress</Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <p style={{ color: '#64748b', marginBottom: '1rem' }}>Your learning profile is ready. Add subjects to build your study priorities.</p>
+            <Link href="/profile/edit" className="btn">Set Up Subjects</Link>
+          </>
+        )}
+      </section>
 
       <div className="card" style={{ background: '#0f172a', color: 'white' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem' }}><AppIcon name="chart" size={21} /><h2 style={{ color: '#fbbf24', marginBottom: 0 }}>Admission Points Score (APS)</h2></div>
         <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
           <div><p style={{ color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase' }}>Current APS</p><p style={{ fontSize: '2.5rem', fontWeight: 700 }}>{aps}</p></div>
-          <div><p style={{ color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase' }}>Pass Type</p><p style={{ fontSize: '1rem', fontWeight: 600, color: aps >= 23 ? '#059669' : aps >= 19 ? '#ca8a04' : '#dc2626' }}>{aps >= 23 ? '✓ Bachelor track' : aps >= 19 ? '⚠ Diploma track' : '✗ Higher Cert'}</p></div>
+          <div><p style={{ color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase' }}>Pass Type</p><p style={{ fontSize: '1rem', fontWeight: 600 }}>{aps >= 23 ? 'Bachelor track' : aps >= 19 ? 'Diploma track' : 'Higher Certificate'}</p></div>
           <div><p style={{ color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase' }}>Subjects</p><p style={{ fontSize: '1.5rem', fontWeight: 700 }}>{subjects.length}</p></div>
         </div>
         {english && <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #334155' }}><p style={{ color: '#cbd5e1', fontSize: '0.875rem' }}><strong>English:</strong> Level {getLevel(english.current_percentage)} ({english.current_percentage}%)</p><ProgressBar current={english.current_percentage} target={english.target_percentage} color="#0891b2" /></div>}
@@ -96,12 +124,31 @@ export default function Dashboard() {
 
       <ExamCountdown />
 
-      <div className="card"><h2>Today's Study Plan</h2><p style={{ color: '#64748b', marginBottom: '1rem' }}>Focus on your weakest subjects first. Every mark counts toward your {profile?.grades?.grade_number === 12 ? 'final NSC' : 'promotion'}.</p><Link href="/study" className="btn">Start Studying</Link><Link href="/upload" className="btn btn-secondary" style={{ marginLeft: '0.5rem' }}>Review Report</Link></div>
+      <section className="card" aria-labelledby="next-heading">
+        <h2 id="next-heading">Your next step</h2>
+        <p style={{ color: '#64748b', marginBottom: '1rem' }}>Learn something, practise it, check your understanding, then improve.</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <Link href="/study" className="btn">Study</Link>
+          <Link href="/quiz" className="btn btn-secondary">Practice</Link>
+          <Link href="/exams" className="btn btn-secondary">Prepare for Exams</Link>
+          <Link href="/upload" className="btn btn-secondary">Review Report</Link>
+        </div>
+      </section>
 
-      <h2 style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>Your Subjects</h2>
-      <div className="grid grid-2">{sortedSubjects.map(s => <div key={s.id} className="card" style={{ borderLeft: `4px solid ${getPriorityColor(s.priority)}` }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}><h3 style={{ fontSize: '1rem' }}>{s.subjects_catalog?.name}</h3><span style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: getPriorityColor(s.priority), fontWeight: 600 }}>{s.priority}</span></div><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#64748b', marginBottom: '0.25rem' }}><span>Current: <strong>{s.current_percentage}%</strong></span><span>Target: <strong>{s.target_percentage}%</strong></span></div><ProgressBar current={s.current_percentage} target={s.target_percentage} color={getPriorityColor(s.priority)} /><div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#64748b' }}>Gap: {s.target_percentage - s.current_percentage} points • Level {getLevel(s.current_percentage)}</div></div>)}</div>
+      <h2 style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>Subjects to improve</h2>
+      <div className="grid grid-2">
+        {sortedSubjects.map(s => (
+          <div key={s.id} className="card" style={{ borderLeft: `4px solid ${getPriorityColor(s.priority)}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}><h3 style={{ fontSize: '1rem' }}>{s.subjects_catalog?.name}</h3><span style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: getPriorityColor(s.priority), fontWeight: 600 }}>{s.priority}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: '#64748b', marginBottom: '0.25rem' }}><span>Current: <strong>{s.current_percentage}%</strong></span><span>Target: <strong>{s.target_percentage}%</strong></span></div>
+            <ProgressBar current={s.current_percentage} target={s.target_percentage} color={getPriorityColor(s.priority)} />
+            <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#64748b' }}>Gap: {Math.max(0, s.target_percentage - s.current_percentage)} points • Level {getLevel(s.current_percentage)}</div>
+            <Link href={`/quiz?subject=${encodeURIComponent(s.subjects_catalog?.code || '')}`} className="btn btn-secondary" style={{ marginTop: '0.75rem' }}>Practice</Link>
+          </div>
+        ))}
+      </div>
 
-      <nav className="nav"><Link href="/profile">Profile</Link><Link href="/study">Study</Link><Link href="/quiz">Practice</Link><Link href="/exams">Exams</Link><Link href="/progress">Progress</Link><Link href="/upload">Review</Link></nav>
+      <nav className="nav" aria-label="Main navigation"><Link href="/">Home</Link><Link href="/profile">Profile</Link><Link href="/study">Study</Link><Link href="/quiz">Practice</Link><Link href="/exams">Exams</Link><Link href="/progress">Progress</Link><Link href="/upload">Review</Link></nav>
     </main>
   );
 }
