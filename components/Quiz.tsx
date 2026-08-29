@@ -139,7 +139,11 @@ export default function Quiz({ topicId, subjectCode, subjectName }: Props) {
   };
 
   useEffect(() => {
+    // This effect intentionally starts the async data-loading lifecycle when the quiz target changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadQuestions();
+  // loadQuestions is recreated during render and is intentionally scoped to the current quiz target.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicId, subjectCode]);
 
   const currentQuestion = questions[currentIndex];
@@ -193,6 +197,8 @@ export default function Quiz({ topicId, subjectCode, subjectName }: Props) {
 
   useEffect(() => {
     if (showResults && !retryMode) void saveAttempt();
+  // saveAttempt intentionally captures the completed quiz state for this result transition.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showResults, retryMode]);
 
   if (loading) {
