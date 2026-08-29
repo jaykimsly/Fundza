@@ -55,7 +55,7 @@ export default function CopyrightPage() {
 
         <h2>6. No Transfer of Rights</h2>
         <p>
-          Access to Fundza does not transfer ownership of Fundza's
+          Access to Fundza does not transfer ownership of Fundza&apos;s
           intellectual property to the user.
         </p>
 
