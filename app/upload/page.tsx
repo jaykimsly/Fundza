@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import DocumentUploader from '@/components/DocumentUploader';
 import AnalysisResults from '@/components/AnalysisResults';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function UploadPage() {
   const [studentId, setStudentId] = useState('');
@@ -23,9 +23,9 @@ export default function UploadPage() {
 
   return (
     <main className="container">
-      <h1>📄 Document Analyzer</h1>
+      <h1>📄 Review My Report</h1>
       <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>
-        Snap a photo of your report or upload a file. Our AI reads the marks automatically.
+        Upload your report, take a photo, or paste the results so Fundza can help you review your marks and identify what to work on next.
       </p>
 
       {studentId && (
@@ -40,10 +40,10 @@ export default function UploadPage() {
 
       <AnalysisResults analysis={analysis} studentId={studentId} />
 
-      <nav className="nav">
-        <Link href="/">Dashboard</Link>
+      <nav className="nav" aria-label="Main navigation">
+        <Link href="/">Home</Link>
         <Link href="/study">Study</Link>
-        <Link href="/quiz">Quiz</Link>
+        <Link href="/quiz">Practice</Link>
         <Link href="/progress">Progress</Link>
       </nav>
     </main>
