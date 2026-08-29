@@ -126,6 +126,34 @@ export const reportSchema = {
   }, required: ['student_name', 'school_name', 'grade', 'term', 'overall_summary', 'overall_average', 'subjects_passed', 'subjects_failed', 'subjects', 'teacher_comments', 'overall_recommendations'],
 };
 
+export const reportExtractionSchema = {
+  type: 'object',
+  properties: {
+    learner_name: { type: ['string', 'null'] },
+    school_name: { type: ['string', 'null'] },
+    grade: { type: ['integer', 'null'] },
+    term: { type: ['string', 'null'] },
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          subject_original: { type: 'string' },
+          mark: { type: ['number', 'null'] },
+          mark_type: { type: 'string' },
+          mark_denominator: { type: ['number', 'null'] },
+          level: { type: ['string', 'null'] },
+          source_text: { type: ['string', 'null'] },
+          confidence: { type: 'number' },
+        },
+        required: ['subject_original', 'mark', 'mark_type', 'mark_denominator', 'level', 'source_text', 'confidence'],
+      },
+    },
+    extraction_warnings: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['learner_name', 'school_name', 'grade', 'term', 'results', 'extraction_warnings'],
+};
+
 export const quizSchema = {
   type: 'object', properties: {
     questions: { type: 'array', minItems: 5, maxItems: 5, items: { type: 'object', properties: {
