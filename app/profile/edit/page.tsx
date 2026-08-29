@@ -24,6 +24,31 @@ export default function EditProfilePage() {
   const [availableSubjects, setAvailableSubjects] = useState<SubjectCatalog[]>([]);
   const [studentSubjects, setStudentSubjects] = useState<any[]>([]);
 
+  const loadSubjects = async (gradeId: string, studentId?: string) => {
+    const [{ data: catalog }, { data: saved }] = await Promise.all([
+      supabase.from('subjects_catalog').select('*').eq('grade_id', gradeId).eq('curriculum', 'CAPS').order('is_compulsory', { ascending: false }).order('name'),
+      studentId
+        ? supabase.from('student_subjects').select('subject_id, current_percentage, target_percentage, priority').eq('student_id', studentId)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+
+    const savedMap = new Map((saved || []).map((s: any) => [s.subject_id, s]));
+    setAvailableSubjects(catalog || []);
+    setStudentSubjects((catalog || []).map((subject: SubjectCatalog) => {
+      const existing = savedMap.get(subject.id);
+      return {
+        subject_id: subject.id,
+        name: subject.name,
+        code: subject.code,
+        category: subject.category,
+        is_compulsory: subject.is_compulsory,
+        current: existing?.current_percentage ?? (subject.is_compulsory ? 50 : 50),
+        target: existing?.target_percentage ?? 60,
+        selected: Boolean(existing),
+      };
+    }));
+  };
+
   useEffect(() => {
     const load = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -62,31 +87,6 @@ export default function EditProfilePage() {
       setLoading(false);
     });
   }, [router]);
-
-  const loadSubjects = async (gradeId: string, studentId?: string) => {
-    const [{ data: catalog }, { data: saved }] = await Promise.all([
-      supabase.from('subjects_catalog').select('*').eq('grade_id', gradeId).eq('curriculum', 'CAPS').order('is_compulsory', { ascending: false }).order('name'),
-      studentId
-        ? supabase.from('student_subjects').select('subject_id, current_percentage, target_percentage, priority').eq('student_id', studentId)
-        : Promise.resolve({ data: [] as any[] }),
-    ]);
-
-    const savedMap = new Map((saved || []).map((s: any) => [s.subject_id, s]));
-    setAvailableSubjects(catalog || []);
-    setStudentSubjects((catalog || []).map((subject: SubjectCatalog) => {
-      const existing = savedMap.get(subject.id);
-      return {
-        subject_id: subject.id,
-        name: subject.name,
-        code: subject.code,
-        category: subject.category,
-        is_compulsory: subject.is_compulsory,
-        current: existing?.current_percentage ?? (subject.is_compulsory ? 50 : 50),
-        target: existing?.target_percentage ?? 60,
-        selected: Boolean(existing),
-      };
-    }));
-  };
 
   const changeGrade = async (gradeId: string) => {
     setSelectedGrade(gradeId);
