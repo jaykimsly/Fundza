@@ -7,7 +7,7 @@ import AppIcon from './AppIcon';
 const items = [
   { href: '/', label: 'Home', icon: 'home' as const },
   { href: '/study', label: 'Study', icon: 'book' as const },
-  { href: '/quiz', label: 'Quiz', icon: 'quiz' as const },
+  { href: '/quiz', label: 'Practice', icon: 'quiz' as const },
   { href: '/progress', label: 'Progress', icon: 'progress' as const },
   { href: '/setup', label: 'Profile', icon: 'user' as const },
 ];
