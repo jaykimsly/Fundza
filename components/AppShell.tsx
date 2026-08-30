@@ -13,6 +13,20 @@ function isPublicRoute(pathname: string) {
   return PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
+const primaryLinks = [
+  { href: '/', label: 'Home' },
+  { href: '/study', label: 'Study' },
+  { href: '/quiz', label: 'Practice' },
+  { href: '/exams', label: 'Exams' },
+  { href: '/progress', label: 'Progress' },
+  { href: '/upload', label: 'Review' },
+  { href: '/profile', label: 'Profile' },
+] as const;
+
+function isActivePath(pathname: string, href: string) {
+  return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -102,28 +116,35 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <>
           <header className="site-header">
             <div className="site-header-inner">
-              <Link href="/" className="brand">Fundza</Link>
+              <Link href="/" className="brand" aria-label="Fundza home">Fundza</Link>
               <nav className="desktop-nav" aria-label="Primary navigation">
-                <Link href="/">Home</Link>
-                <Link href="/study">Study</Link>
-                <Link href="/quiz">Quiz</Link>
-                <Link href="/exams">Exams</Link>
-                <Link href="/progress">Progress</Link>
-                <Link href="/upload">Analyze</Link>
-                <Link href="/profile">Profile</Link>
+                {primaryLinks.map(({ href, label }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={isActivePath(pathname, href) ? 'page' : undefined}
+                  >
+                    {label}
+                  </Link>
+                ))}
               </nav>
             </div>
           </header>
           <nav className="mobile-nav" aria-label="Mobile navigation">
-            <Link href="/" className={pathname === '/' ? 'active' : ''}>Home</Link>
-            <Link href="/study" className={pathname.startsWith('/study') ? 'active' : ''}>Study</Link>
-            <Link href="/quiz" className={pathname.startsWith('/quiz') ? 'active' : ''}>Quiz</Link>
-            <Link href="/exams" className={pathname.startsWith('/exams') ? 'active' : ''}>Exams</Link>
-            <Link href="/profile" className={pathname.startsWith('/profile') ? 'active' : ''}>Profile</Link>
+            {primaryLinks.slice(0, 5).map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                className={isActivePath(pathname, href) ? 'active' : ''}
+                aria-current={isActivePath(pathname, href) ? 'page' : undefined}
+              >
+                {label}
+              </Link>
+            ))}
           </nav>
         </>
       )}
-      {children}
+      <div id="main-content">{children}</div>
     </>
   );
 }
