@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { GEMINI_FALLBACK_MODEL, GEMINI_MODEL } from '@/lib/ai';
 
 const apiKey = process.env.GEMINI_API_KEY || '';
@@ -57,7 +57,7 @@ export async function generateGeminiJson<T>(input: string, schema: Record<string
       config: {
         responseMimeType: 'application/json',
         responseSchema: schema,
-        thinkingConfig: { thinkingLevel: 'medium' },
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
       },
     });
     return parseJsonResponse<T>(response.text || '');
@@ -81,7 +81,7 @@ export async function generateGeminiMultimodalJson<T>(
       config: {
         responseMimeType: 'application/json',
         responseSchema: schema,
-        thinkingConfig: { thinkingLevel: 'medium' },
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
       },
     });
     return parseJsonResponse<T>(response.text || '');
