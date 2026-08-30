@@ -3,6 +3,12 @@ import { GEMINI_FALLBACK_MODEL, GEMINI_MODEL } from '@/lib/ai';
 
 const apiKey = process.env.GEMINI_API_KEY || '';
 
+type GeminiError = {
+  status?: number | string;
+  message?: string;
+  code?: string | number;
+};
+
 export function isGeminiReportConfigured() {
   return apiKey.length > 20 && !apiKey.includes('your-gemini');
 }
@@ -12,8 +18,9 @@ function client() {
   return new GoogleGenAI({ apiKey });
 }
 
-function shouldFallbackModel(error: any) {
-  const raw = `${error?.status ?? ''} ${error?.message ?? ''}`.toLowerCase();
+function shouldFallbackModel(error: unknown) {
+  const candidate = error as GeminiError;
+  const raw = `${candidate?.status ?? ''} ${candidate?.message ?? ''}`.toLowerCase();
   return raw.includes('429') || raw.includes('500') || raw.includes('502') || raw.includes('503') || raw.includes('504') || raw.includes('unavailable') || raw.includes('high demand') || raw.includes('overloaded') || raw.includes('rate limit') || raw.includes('timeout');
 }
 
@@ -51,7 +58,7 @@ export async function generateGeminiJson<T>(input: string, schema: Record<string
         responseMimeType: 'application/json',
         responseSchema: schema,
         thinkingConfig: { thinkingLevel: 'medium' },
-      } as any,
+      },
     });
     return parseJsonResponse<T>(response.text || '');
   });
@@ -75,7 +82,7 @@ export async function generateGeminiMultimodalJson<T>(
         responseMimeType: 'application/json',
         responseSchema: schema,
         thinkingConfig: { thinkingLevel: 'medium' },
-      } as any,
+      },
     });
     return parseJsonResponse<T>(response.text || '');
   });
