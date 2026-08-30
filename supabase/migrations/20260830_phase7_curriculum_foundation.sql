@@ -1,5 +1,12 @@
 -- Phase 7: CAPS curriculum hierarchy and provenance.
+-- Include the earlier topic expansion here as a guard for databases that
+-- have not yet applied the older expand_topics_for_caps migration.
 alter table public.topics
+  add column if not exists grade_number integer,
+  add column if not exists term_number integer,
+  add column if not exists topic_number integer,
+  add column if not exists content text,
+  add column if not exists source_document text,
   add column if not exists sub_topic text,
   add column if not exists learning_objective text,
   add column if not exists material text,
