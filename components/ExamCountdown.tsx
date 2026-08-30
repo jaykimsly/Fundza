@@ -12,6 +12,9 @@ interface ExamRow {
   subject_name: string;
   paper: string;
   exam_type: string;
+  source_name: string | null;
+  verified_at: string | null;
+  timezone: string | null;
 }
 
 interface StudentSubjectRow {
@@ -20,7 +23,9 @@ interface StudentSubjectRow {
 }
 
 function startDate(exam: ExamRow) {
-  return new Date(`${exam.exam_date}T${exam.start_time}+02:00`);
+  const timezone = exam.timezone || 'Africa/Johannesburg';
+  const offset = timezone === 'Africa/Johannesburg' ? '+02:00' : 'Z';
+  return new Date(`${exam.exam_date}T${exam.start_time}${offset}`);
 }
 
 function normalise(value: string) {
@@ -74,12 +79,12 @@ export default function ExamCountdown() {
         .eq('auth_user_id', session.user.id)
         .maybeSingle();
 
-      const gradeNumber = (student as any)?.grades?.grade_number;
+      const gradeNumber = (student as { grades?: { grade_number?: number } | null } | null)?.grades?.grade_number;
       if (!student || gradeNumber !== 12) { setLoading(false); return; }
 
       const [{ data: timetable }, { data: subjects }] = await Promise.all([
         supabase.from('exam_timetable')
-          .select('id, exam_date, start_time, duration_minutes, session, subject_name, paper, exam_type')
+          .select('id, exam_date, start_time, duration_minutes, session, subject_name, paper, exam_type, source_name, verified_at, timezone')
           .eq('grade_number', 12).eq('exam_type', 'preparatory')
           .order('exam_date').order('start_time'),
         supabase.from('student_subjects')
@@ -87,12 +92,12 @@ export default function ExamCountdown() {
           .eq('student_id', student.id),
       ]);
 
-      setExams(timetable || []);
+      setExams((timetable || []) as ExamRow[]);
       setStudentSubjects((subjects || []) as unknown as StudentSubjectRow[]);
       setLoading(false);
     };
 
-    load();
+    void load();
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
@@ -126,6 +131,9 @@ export default function ExamCountdown() {
         <strong>{next.subject_name}</strong>
         <div style={{ color: '#475569', fontSize: '0.875rem', marginTop: '0.25rem' }}>
           {next.paper} • {next.exam_date} • {next.start_time.slice(0, 5)} • {next.duration_minutes} min
+        </div>
+        <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+          {next.source_name || 'Exam timetable'} {next.verified_at ? '• verified' : '• verification pending'}
         </div>
       </div>
       {upcoming.length > 1 && (

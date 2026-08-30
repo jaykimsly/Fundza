@@ -12,6 +12,11 @@ export type KnowledgeMetadata = {
   exam_year?: number | null;
   exam_session?: string | null;
   source_name?: string | null;
+  source_url?: string | null;
+  curriculum_year?: number | null;
+  curriculum_version?: string | null;
+  provenance_type?: 'official' | 'past_paper' | 'teacher' | 'fundza' | 'automated' | 'other';
+  verification_status?: 'unverified' | 'verified' | 'needs_review';
   metadata?: Record<string, unknown>;
 };
 
@@ -44,16 +49,23 @@ export async function ingestKnowledgeDocument(text: string, meta: KnowledgeMetad
   const hash = contentHash(text);
   const { data: existing } = await supabase.from('knowledge_documents').select('id').eq('content_hash', hash).maybeSingle();
   if (existing?.id) return { documentId: existing.id, chunksCreated: 0, duplicate: true };
+  const provenanceType = meta.provenance_type ?? 'other';
+  const verificationStatus = meta.verification_status ?? 'unverified';
   const { data: document, error: documentError } = await supabase.from('knowledge_documents').insert({
     title: meta.title, source_type: meta.source_type, subject_code: meta.subject_code ?? null, subject_name: meta.subject_name ?? null,
     grade: meta.grade ?? null, paper: meta.paper ?? null, exam_year: meta.exam_year ?? null, exam_session: meta.exam_session ?? null,
-    source_name: meta.source_name ?? null, content_hash: hash, metadata: meta.metadata ?? {},
+    source_name: meta.source_name ?? null, source_url: meta.source_url ?? null, curriculum_year: meta.curriculum_year ?? null,
+    curriculum_version: meta.curriculum_version ?? null, provenance_type: provenanceType, verification_status: verificationStatus,
+    content_hash: hash, metadata: meta.metadata ?? {},
   }).select('id').single();
   if (documentError) throw documentError;
   const chunks = chunkText(text);
   for (let i = 0; i < chunks.length; i++) {
     const embedding = await embedText(chunks[i], meta.title);
-    const { error } = await supabase.from('knowledge_chunks').insert({ document_id: document.id, chunk_index: i, content: chunks[i], token_count: Math.ceil(chunks[i].length / 4), embedding, metadata: { ...meta.metadata, chunk_index: i } });
+    const { error } = await supabase.from('knowledge_chunks').insert({
+      document_id: document.id, chunk_index: i, content: chunks[i], token_count: Math.ceil(chunks[i].length / 4), embedding,
+      provenance_type: provenanceType, verification_status: verificationStatus, metadata: { ...meta.metadata, chunk_index: i },
+    });
     if (error) throw error;
   }
   return { documentId: document.id, chunksCreated: chunks.length, duplicate: false };
@@ -67,17 +79,20 @@ function lexicalSimilarity(query: string, content: string) {
   return matches / queryTokens.size;
 }
 
+type KnowledgeDocumentRow = { title?: string; source_type?: string; subject_code?: string | null; subject_name?: string | null; grade?: number | null; paper?: string | null; exam_year?: number | null; exam_session?: string | null; source_url?: string | null; provenance_type?: string; verification_status?: string };
+type KnowledgeChunkRow = { content?: string; token_count?: number; metadata?: Record<string, unknown>; knowledge_documents?: KnowledgeDocumentRow | null };
+
 async function retrieveKnowledgeLexically(options: { query: string; matchCount?: number; subjectCode?: string | null; grade?: number | null }) {
   const supabase = getSupabaseAdmin();
-  let query = supabase.from('knowledge_chunks').select('content,token_count,metadata,knowledge_documents(title,source_type,subject_code,subject_name,grade,paper,exam_year,exam_session)').limit(300);
+  let query = supabase.from('knowledge_chunks').select('content,token_count,metadata,knowledge_documents(title,source_type,subject_code,subject_name,grade,paper,exam_year,exam_session,source_url,provenance_type,verification_status)').limit(300);
   if (options.grade) query = query.eq('knowledge_documents.grade', options.grade);
   if (options.subjectCode) query = query.eq('knowledge_documents.subject_code', options.subjectCode);
   const { data, error } = await query; if (error) throw error;
-  return (data ?? []).map((row: any) => {
+  return (data ?? []).map((row: KnowledgeChunkRow) => {
     const doc = row.knowledge_documents || {};
     const similarity = lexicalSimilarity(options.query, `${doc.title || ''} ${doc.subject_name || ''} ${row.content || ''}`);
-    return { title: doc.title, source_type: doc.source_type, subject_code: doc.subject_code, subject_name: doc.subject_name, grade: doc.grade, paper: doc.paper, exam_year: doc.exam_year, exam_session: doc.exam_session, content: row.content, token_count: row.token_count, metadata: row.metadata, similarity };
-  }).filter((row: any) => row.similarity > 0).sort((a: any, b: any) => b.similarity - a.similarity).slice(0, options.matchCount ?? 8);
+    return { title: doc.title, source_type: doc.source_type, subject_code: doc.subject_code, subject_name: doc.subject_name, grade: doc.grade, paper: doc.paper, exam_year: doc.exam_year, exam_session: doc.exam_session, source_url: doc.source_url, provenance_type: doc.provenance_type, verification_status: doc.verification_status, content: row.content, token_count: row.token_count, metadata: row.metadata, similarity };
+  }).filter((row) => row.similarity > 0).sort((a, b) => b.similarity - a.similarity).slice(0, options.matchCount ?? 8);
 }
 
 export async function retrieveKnowledge(options: { query: string; matchCount?: number; subjectCode?: string | null; grade?: number | null }) {
@@ -87,7 +102,7 @@ export async function retrieveKnowledge(options: { query: string; matchCount?: n
   const embedding = await embedQuery(options.query);
   const { data, error } = await supabase.rpc('match_knowledge_chunks', { query_embedding: embedding, match_count: options.matchCount ?? 8, filter_subject_code: options.subjectCode ?? null, filter_grade: options.grade ?? null });
   if (error) throw error;
-  return (data ?? []).filter((row: any) => Number(row.similarity) >= 0.45);
+  return (data ?? []).filter((row: { similarity?: number }) => Number(row.similarity) >= 0.45);
 }
 
 export async function resolveSubject(subjectName: string) {
@@ -100,10 +115,10 @@ export async function resolveSubject(subjectName: string) {
   }
   const { data: subjects, error } = await supabase.from('subjects_catalog').select('id,name,code').limit(500);
   if (error) throw error;
-  const scored = (subjects ?? []).map((subject: any) => {
+  const scored = (subjects ?? []).map((subject: { id: string; name: string; code: string }) => {
     const candidate = normalizeSubjectName(subject.name); const a = new Set(normalized.split(' ')); const b = new Set(candidate.split(' '));
     const intersection = [...a].filter((x) => b.has(x)).length; const union = new Set([...a, ...b]).size || 1;
     return { ...subject, confidence: intersection / union };
-  }).sort((a: any, b: any) => b.confidence - a.confidence);
+  }).sort((a, b) => b.confidence - a.confidence);
   const best = scored[0]; return best && best.confidence >= 0.72 ? best : null;
 }
