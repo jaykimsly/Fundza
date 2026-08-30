@@ -81,7 +81,7 @@ export default function StudyPage() {
         setTopics([]);
         setSelectedTopic(null);
         setTopicsLoading(false);
-        setTopicError('Topics could not be loaded right now. You can still use AI practice for this subject.');
+        setTopicError('Topics could not be loaded right now. You can still use practice for this subject.');
       }
     };
 
@@ -115,9 +115,16 @@ export default function StudyPage() {
       <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>Choose a subject, select a curriculum topic, learn the material, then practise what you learned.</p>
       <div className="card">
         <h2>My Subjects</h2>
-        <div style={{ display: 'grid', gap: '0.5rem', marginTop: '1rem' }}>
+        <div style={{ display: 'grid', gap: '0.5rem', marginTop: '1rem' }} role="group" aria-label="My subjects">
           {subjects.map(subject => (
-            <button key={subject.id} onClick={() => setSelected(subject)} className={selected?.id === subject.id ? 'btn' : 'btn btn-secondary'} style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+            <button
+              key={subject.id}
+              type="button"
+              onClick={() => setSelected(subject)}
+              className={selected?.id === subject.id ? 'btn' : 'btn btn-secondary'}
+              aria-pressed={selected?.id === subject.id}
+              style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', gap: '1rem' }}
+            >
               <span>{subject.subjects_catalog?.name}</span><span>{subject.current_percentage}% → {subject.target_percentage}%</span>
             </button>
           ))}
@@ -125,21 +132,21 @@ export default function StudyPage() {
       </div>
       {!subjects.length && <div className="card"><p>No subjects are saved yet. Complete your profile first.</p><Link href="/profile/edit" className="btn">Set Up Subjects</Link></div>}
       {selected && <>
-        <section className="card" aria-labelledby="topics-heading">
+        <section className="card" aria-labelledby="topics-heading" aria-busy={topicsLoading}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '1rem', flexWrap: 'wrap' }}>
             <div><p style={{ color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Subject</p><h2 id="topics-heading" style={{ marginBottom: '0.25rem' }}>{selected.subjects_catalog?.name}</h2><p style={{ color: '#64748b', fontSize: '0.875rem' }}>Current {selected.current_percentage}% · Target {selected.target_percentage}% · Priority {selected.priority}</p></div>
             <Link href={`/quiz?subject=${encodeURIComponent(selected.subjects_catalog?.code || '')}`} className="btn btn-secondary">Practice Subject</Link>
           </div>
-          {topicsLoading && <p style={{ color: '#64748b', marginTop: '1rem' }}>Loading curriculum topics...</p>}
-          {topicError && <div className="warning-box" style={{ marginTop: '1rem' }}>{topicError}</div>}
-          {!topicsLoading && !activeTopics.length && !topicError && <div className="empty-state" style={{ marginTop: '1rem' }}><h3>No curriculum topics yet</h3><p>This subject is available for AI practice, but its topic material has not been loaded yet.</p></div>}
-          {topicGroups.length > 0 && <div style={{ display: 'grid', gap: '1rem', marginTop: '1.25rem' }}>{topicGroups.map(([groupName, groupTopics]) => <div key={groupName}><h3 style={{ fontSize: '0.95rem', marginBottom: '0.5rem' }}>{groupName}</h3><div style={{ display: 'grid', gap: '0.5rem' }}>{groupTopics.map(topic => <button key={topic.id} onClick={() => setSelectedTopic(topic)} className={activeTopic?.id === topic.id ? 'btn' : 'btn btn-secondary'} style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}><span>{topic.topic_number ? `${topic.topic_number}. ` : ''}{topic.name}</span><span style={{ fontSize: '0.75rem', opacity: 0.8 }}>{topic.paper || 'Study'}</span></button>)}</div></div>)}</div>}
+          {topicsLoading && <p style={{ color: '#64748b', marginTop: '1rem' }} role="status">Loading curriculum topics...</p>}
+          {topicError && <div className="warning-box" style={{ marginTop: '1rem' }} role="alert">{topicError}</div>}
+          {!topicsLoading && !activeTopics.length && !topicError && <div className="empty-state" style={{ marginTop: '1rem' }}><h3>No curriculum topics yet</h3><p>This subject is available for practice, but its topic material has not been loaded yet.</p></div>}
+          {topicGroups.length > 0 && <div style={{ display: 'grid', gap: '1rem', marginTop: '1.25rem' }}>{topicGroups.map(([groupName, groupTopics]) => <div key={groupName}><h3 style={{ fontSize: '0.95rem', marginBottom: '0.5rem' }}>{groupName}</h3><div style={{ display: 'grid', gap: '0.5rem' }} role="group" aria-label={`${groupName} topics`}>{groupTopics.map(topic => <button type="button" key={topic.id} onClick={() => setSelectedTopic(topic)} className={activeTopic?.id === topic.id ? 'btn' : 'btn btn-secondary'} aria-pressed={activeTopic?.id === topic.id} style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}><span>{topic.topic_number ? `${topic.topic_number}. ` : ''}{topic.name}</span><span style={{ fontSize: '0.75rem', opacity: 0.8 }}>{topic.paper || 'Study'}</span></button>)}</div></div>)}</div>}
         </section>
-        {activeTopic && <section className="card" aria-labelledby="topic-heading"><p style={{ color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Learning objective</p><h2 id="topic-heading">{activeTopic.name}</h2><p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>{activeTopic.paper || 'Curriculum topic'}{activeTopic.term_number ? ` · Term ${activeTopic.term_number}` : ''}</p>{activeTopic.content ? <div style={{ lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{activeTopic.content}</div> : <div className="empty-state"><h3>Study material is not loaded yet</h3><p>The topic is in the curriculum, but detailed material has not been added yet. Use AI practice below while the knowledge base is being populated.</p></div>}<div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1.25rem' }}><Link href={`/quiz?topic=${encodeURIComponent(activeTopic.id)}`} className="btn">Practise This Topic</Link><Link href={`/quiz?subject=${encodeURIComponent(selected.subjects_catalog?.code || '')}`} className="btn btn-secondary">Practise Subject</Link></div></section>}
-        <section className="card"><h2>AI Practice</h2><p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>Generate practice questions at your current level for {selected.subjects_catalog?.name}.</p><AiQuizGenerator topic={activeTopic?.name || selected.subjects_catalog?.name || 'General revision'} subject={selected.subjects_catalog?.name || 'Subject'} studentLevel={Number(selected.current_percentage || 0)} /></section>
+        {activeTopic && <section className="card" aria-labelledby="topic-heading"><p style={{ color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Learning objective</p><h2 id="topic-heading">{activeTopic.name}</h2><p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>{activeTopic.paper || 'Curriculum topic'}{activeTopic.term_number ? ` · Term ${activeTopic.term_number}` : ''}</p>{activeTopic.content ? <div style={{ lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{activeTopic.content}</div> : <div className="empty-state"><h3>Study material is not loaded yet</h3><p>The topic is in the curriculum, but detailed material has not been added yet. Use practice below while the knowledge base is being populated.</p></div>}<div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1.25rem' }}><Link href={`/quiz?topic=${encodeURIComponent(activeTopic.id)}`} className="btn">Practise This Topic</Link><Link href={`/quiz?subject=${encodeURIComponent(selected.subjects_catalog?.code || '')}`} className="btn btn-secondary">Practise Subject</Link></div></section>}
+        <section className="card"><h2>Practice</h2><p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>Generate practice questions at your current level for {selected.subjects_catalog?.name}.</p><AiQuizGenerator topic={activeTopic?.name || selected.subjects_catalog?.name || 'General revision'} subject={selected.subjects_catalog?.name || 'Subject'} studentLevel={Number(selected.current_percentage || 0)} /></section>
       </>}
       <div style={{ marginTop: '2rem' }}><Link href="/quiz" className="btn">Practice</Link><Link href="/upload" className="btn btn-secondary" style={{ marginLeft: '0.5rem' }}>Review Report</Link></div>
-      <nav className="nav"><Link href="/">Home</Link><Link href="/profile">Profile</Link><Link href="/quiz">Practice</Link><Link href="/exams">Exams</Link><Link href="/progress">Progress</Link></nav>
+      <nav className="nav" aria-label="Study page navigation"><Link href="/">Home</Link><Link href="/profile">Profile</Link><Link href="/quiz">Practice</Link><Link href="/exams">Exams</Link><Link href="/progress">Progress</Link></nav>
     </main>
   );
 }
