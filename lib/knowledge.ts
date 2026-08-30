@@ -80,7 +80,7 @@ function lexicalSimilarity(query: string, content: string) {
 }
 
 type KnowledgeDocumentRow = { title?: string; source_type?: string; subject_code?: string | null; subject_name?: string | null; grade?: number | null; paper?: string | null; exam_year?: number | null; exam_session?: string | null; source_url?: string | null; provenance_type?: string; verification_status?: string };
-type KnowledgeChunkRow = { content?: string; token_count?: number; metadata?: Record<string, unknown>; knowledge_documents?: KnowledgeDocumentRow | null };
+type KnowledgeChunkRow = { content?: string; token_count?: number; metadata?: Record<string, unknown>; knowledge_documents?: KnowledgeDocumentRow | KnowledgeDocumentRow[] | null };
 
 async function retrieveKnowledgeLexically(options: { query: string; matchCount?: number; subjectCode?: string | null; grade?: number | null }) {
   const supabase = getSupabaseAdmin();
@@ -88,8 +88,9 @@ async function retrieveKnowledgeLexically(options: { query: string; matchCount?:
   if (options.grade) query = query.eq('knowledge_documents.grade', options.grade);
   if (options.subjectCode) query = query.eq('knowledge_documents.subject_code', options.subjectCode);
   const { data, error } = await query; if (error) throw error;
-  return (data ?? []).map((row: KnowledgeChunkRow) => {
-    const doc = row.knowledge_documents || {};
+  return (data ?? []).map((row) => {
+    const documentRelation = row.knowledge_documents as KnowledgeDocumentRow | KnowledgeDocumentRow[] | null | undefined;
+    const doc = Array.isArray(documentRelation) ? documentRelation[0] ?? {} : documentRelation ?? {};
     const similarity = lexicalSimilarity(options.query, `${doc.title || ''} ${doc.subject_name || ''} ${row.content || ''}`);
     return { title: doc.title, source_type: doc.source_type, subject_code: doc.subject_code, subject_name: doc.subject_name, grade: doc.grade, paper: doc.paper, exam_year: doc.exam_year, exam_session: doc.exam_session, source_url: doc.source_url, provenance_type: doc.provenance_type, verification_status: doc.verification_status, content: row.content, token_count: row.token_count, metadata: row.metadata, similarity };
   }).filter((row) => row.similarity > 0).sort((a, b) => b.similarity - a.similarity).slice(0, options.matchCount ?? 8);
