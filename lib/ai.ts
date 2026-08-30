@@ -10,6 +10,21 @@ export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
 export const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.6-flash';
 export const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001';
 
+type GatewayMessageContent = string | Array<{
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: { url: string };
+}>;
+
+type GatewayMessage = { role: 'system' | 'user' | 'assistant'; content: GatewayMessageContent };
+
+type GatewayPayload = {
+  error?: { message?: unknown };
+  choices?: Array<{ message?: { content?: unknown } }>;
+};
+
+type GatewayError = Error & { status?: number };
+
 export function isAiGatewayConfigured() {
   return gatewayApiKey.length > 20 && !gatewayApiKey.includes('your-gateway');
 }
@@ -27,12 +42,19 @@ function geminiClient() {
   return new GoogleGenAI({ apiKey: geminiApiKey });
 }
 
-function shouldFallbackModel(error: any) {
-  const raw = `${error?.status ?? ''} ${error?.message ?? ''}`.toLowerCase();
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function shouldFallbackModel(error: unknown) {
+  const candidate = isRecord(error) ? error : {};
+  const status = typeof candidate.status === 'number' || typeof candidate.status === 'string' ? candidate.status : '';
+  const message = typeof candidate.message === 'string' ? candidate.message : '';
+  const raw = `${status} ${message}`.toLowerCase();
   return raw.includes('429') || raw.includes('500') || raw.includes('502') || raw.includes('503') || raw.includes('504') || raw.includes('unavailable') || raw.includes('high demand') || raw.includes('overloaded') || raw.includes('rate limit') || raw.includes('timeout');
 }
 
-async function gatewayChat(messages: any[], model: string, options: { json?: boolean; maxOutputTokens?: number } = {}) {
+async function gatewayChat(messages: GatewayMessage[], model: string, options: { json?: boolean; maxOutputTokens?: number } = {}) {
   if (!isAiGatewayConfigured()) throw new Error('AI_GATEWAY_API_KEY is not configured');
   const response = await fetch(`${gatewayBaseUrl}/chat/completions`, {
     method: 'POST',
@@ -41,11 +63,21 @@ async function gatewayChat(messages: any[], model: string, options: { json?: boo
     cache: 'no-store',
   });
   const raw = await response.text();
-  let payload: any;
-  try { payload = raw ? JSON.parse(raw) : null; } catch { payload = null; }
+  let payload: GatewayPayload | null = null;
+  try {
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (isRecord(parsed)) {
+      payload = parsed as GatewayPayload;
+    }
+  } catch {
+    payload = null;
+  }
   if (!response.ok) {
-    const message = payload?.error?.message || raw || `AI Gateway request failed with ${response.status}`;
-    const error: any = new Error(message); error.status = response.status; throw error;
+    const errorMessage = payload?.error?.message;
+    const message = typeof errorMessage === 'string' ? errorMessage : raw || `AI Gateway request failed with ${response.status}`;
+    const error: GatewayError = new Error(message);
+    error.status = response.status;
+    throw error;
   }
   const text = payload?.choices?.[0]?.message?.content;
   if (typeof text !== 'string' || !text.trim()) throw new Error('AI Gateway returned an empty response');
@@ -85,7 +117,7 @@ export async function generateJson<T>(input: string, schema: Record<string, unkn
 export async function generateMultimodalJson<T>(prompt: string, fileData: string, mimeType: string, schema: Record<string, unknown>): Promise<T> {
   if (!mimeType.startsWith('image/')) throw new Error('AI Gateway free multimodal mode currently supports image input only');
   const schemaText = JSON.stringify(schema);
-  const messages = [{ role: 'user', content: [
+  const messages: GatewayMessage[] = [{ role: 'user', content: [
     { type: 'text', text: `${prompt}\n\nReturn ONLY valid JSON matching this schema.\nSCHEMA:\n${schemaText}` },
     { type: 'image_url', image_url: { url: `data:${mimeType};base64,${fileData}` } },
   ] }];
@@ -104,7 +136,7 @@ export async function generateUploadedFileJson<T>(prompt: string, filePath: stri
 
 export async function embedText(text: string, title?: string) {
   const ai = geminiClient();
-  const result = await ai.models.embedContent({ model: GEMINI_EMBEDDING_MODEL, contents: text, config: { taskType: 'RETRIEVAL_DOCUMENT', title, outputDimensionality: 768, autoTruncate: true } as any });
+  const result = await ai.models.embedContent({ model: GEMINI_EMBEDDING_MODEL, contents: text, config: { taskType: 'RETRIEVAL_DOCUMENT', title, outputDimensionality: 768, autoTruncate: true } as unknown as Parameters<typeof ai.models.embedContent>[0]['config'] });
   const values = result.embeddings?.[0]?.values;
   if (!values || values.length !== 768) throw new Error(`Gemini embedding returned ${values?.length ?? 0} dimensions; expected 768`);
   return values;
@@ -112,7 +144,7 @@ export async function embedText(text: string, title?: string) {
 
 export async function embedQuery(text: string) {
   const ai = geminiClient();
-  const result = await ai.models.embedContent({ model: GEMINI_EMBEDDING_MODEL, contents: text, config: { taskType: 'RETRIEVAL_QUERY', outputDimensionality: 768, autoTruncate: true } as any });
+  const result = await ai.models.embedContent({ model: GEMINI_EMBEDDING_MODEL, contents: text, config: { taskType: 'RETRIEVAL_QUERY', outputDimensionality: 768, autoTruncate: true } as unknown as Parameters<typeof ai.models.embedContent>[0]['config'] });
   const values = result.embeddings?.[0]?.values;
   if (!values || values.length !== 768) throw new Error('Gemini query embedding failed');
   return values;
