@@ -1,0 +1,160 @@
+/* Fundza V2 responsive and accessibility refinements. */
+
+.skip-link {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  z-index: 200;
+  transform: translateY(-180%);
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+#main-content {
+  min-width: 0;
+}
+
+.btn,
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+.btn {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.desktop-nav {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.desktop-nav a {
+  white-space: nowrap;
+}
+
+.mobile-nav {
+  padding-bottom: env(safe-area-inset-bottom);
+  height: calc(68px + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 2px;
+  align-items: stretch;
+}
+
+.mobile-nav a {
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  min-height: 68px;
+  padding: 8px 4px;
+  gap: 3px;
+  flex-direction: column;
+  text-align: center;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.mobile-nav a::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.mobile-nav a.active::before {
+  background: currentColor;
+}
+
+.mobile-nav a:focus-visible {
+  outline-offset: -3px;
+}
+
+@media (max-width: 639px) {
+  body {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  .site-header-inner,
+  .container,
+  .legal-shell {
+    width: min(100% - 20px, 1080px);
+  }
+
+  .site-header-inner {
+    min-height: 60px;
+    gap: 10px;
+  }
+
+  .brand {
+    flex: 0 0 auto;
+  }
+
+  .card {
+    padding: 1rem;
+    border-radius: 14px;
+  }
+
+  .legal-actions,
+  .loading-actions {
+    align-items: stretch;
+  }
+
+  .legal-actions .btn,
+  .loading-actions .btn {
+    flex: 1 1 160px;
+  }
+
+  .countdown-item {
+    min-width: 64px;
+    flex: 1 1 64px;
+  }
+
+  table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+@media (min-width: 640px) {
+  .mobile-nav {
+    display: none;
+  }
+}
+
+@media (min-width: 960px) {
+  .desktop-nav {
+    flex-wrap: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-nav a::before {
+    transition: none;
+  }
+}
