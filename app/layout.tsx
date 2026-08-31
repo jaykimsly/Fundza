@@ -1,4 +1,5 @@
 import "./globals.css";
+import "./responsive.css";
 import AppShell from "@/components/AppShell";
 
 export const metadata = {
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        <a className="skip-link" href="#main-content">Skip to content</a>
         <AppShell>{children}</AppShell>
       </body>
     </html>
