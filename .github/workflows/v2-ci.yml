@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - develop-v2
+      - phase-14-ui-redesign
   pull_request:
     branches:
       - develop-v2
+      - phase-14-ui-redesign
   workflow_dispatch:
 
 permissions:

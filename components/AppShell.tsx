@@ -5,23 +5,25 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import AppLoader from '@/components/AppLoader';
+import AppIcon from '@/components/AppIcon';
 
 const PUBLIC_ROUTES = ['/login', '/auth', '/legal'];
 const REQUIRED_DOCUMENTS = ['terms', 'privacy', 'copyright', 'legal'] as const;
 
+const primaryLinks = [
+  { href: '/', label: 'Home', icon: 'home' },
+  { href: '/study', label: 'Study', icon: 'book' },
+  { href: '/quiz', label: 'Practice', icon: 'quiz' },
+  { href: '/exams', label: 'Exams', icon: 'exam' },
+  { href: '/progress', label: 'Progress', icon: 'progress' },
+  { href: '/upload', label: 'Review', icon: 'upload' },
+] as const;
+
+const mobileLinks = primaryLinks.slice(0, 5);
+
 function isPublicRoute(pathname: string) {
   return PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
-
-const primaryLinks = [
-  { href: '/', label: 'Home' },
-  { href: '/study', label: 'Study' },
-  { href: '/quiz', label: 'Practice' },
-  { href: '/exams', label: 'Exams' },
-  { href: '/progress', label: 'Progress' },
-  { href: '/upload', label: 'Review' },
-  { href: '/profile', label: 'Profile' },
-] as const;
 
 function isActivePath(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
@@ -38,25 +40,56 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     const checkAccess = async () => {
       if (isPublicRoute(pathname)) {
-        setShowNav(false); setCheckingLegal(false); return;
+        setShowNav(false);
+        setCheckingLegal(false);
+        return;
       }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (cancelled) return;
-      if (!user) { setShowNav(false); setCheckingLegal(false); return; }
-      const { data: docs, error: docsError } = await supabase.from('legal_documents').select('document_type, version').eq('required', true);
-      if (docsError) { console.error('Unable to verify legal compliance', docsError); setShowNav(true); setCheckingLegal(false); return; }
-      const { data: acceptances, error: acceptanceError } = await supabase.from('legal_acceptances').select('document_type, document_version').eq('user_id', user.id);
-      if (acceptanceError) { console.error('Unable to load legal acceptances', acceptanceError); setShowNav(true); setCheckingLegal(false); return; }
+      if (!user) {
+        setShowNav(false);
+        setCheckingLegal(false);
+        return;
+      }
+
+      const { data: docs, error: docsError } = await supabase
+        .from('legal_documents')
+        .select('document_type, version')
+        .eq('required', true);
+      if (docsError) {
+        console.error('Unable to verify legal compliance', docsError);
+        setShowNav(true);
+        setCheckingLegal(false);
+        return;
+      }
+
+      const { data: acceptances, error: acceptanceError } = await supabase
+        .from('legal_acceptances')
+        .select('document_type, document_version')
+        .eq('user_id', user.id);
+      if (acceptanceError) {
+        console.error('Unable to load legal acceptances', acceptanceError);
+        setShowNav(true);
+        setCheckingLegal(false);
+        return;
+      }
+
       const accepted = new Set((acceptances || []).map((item) => `${item.document_type}:${item.document_version}`));
       const missing = REQUIRED_DOCUMENTS.some((type) => {
         const doc = (docs || []).find((item) => item.document_type === type);
         return !doc || !accepted.has(`${type}:${doc.version}`);
       });
+
       if (missing && !isLegalRoute && pathname !== '/profile') {
-        router.replace(`/legal/accept?returnTo=${encodeURIComponent(pathname)}`); return;
+        router.replace(`/legal/accept?returnTo=${encodeURIComponent(pathname)}`);
+        return;
       }
-      setShowNav(!isLegalRoute); setCheckingLegal(false);
+
+      setShowNav(!isLegalRoute);
+      setCheckingLegal(false);
     };
+
     checkAccess();
     return () => { cancelled = true; };
   }, [pathname, router, isLegalRoute]);
@@ -70,24 +103,80 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, [pathname, router]);
 
-  if (checkingLegal && !isPublicRoute(pathname)) return <AppLoader message="Checking your account and preparing Fundza..." />;
+  if (checkingLegal && !isPublicRoute(pathname)) {
+    return <AppLoader message="Checking your account and preparing Fundza..." />;
+  }
 
-  return (
-    <>
-      {showNav && <>
-        <header className="site-header">
-          <div className="site-header-inner">
-            <Link href="/" className="brand" aria-label="Fundza home">Fundza</Link>
-            <nav className="desktop-nav" aria-label="Primary navigation">
-              {primaryLinks.map(({ href, label }) => <Link key={href} href={href} aria-current={isActivePath(pathname, href) ? 'page' : undefined}>{label}</Link>)}
-            </nav>
+  const shell = showNav ? (
+    <div className="fd-app-shell">
+      <aside className="fd-desktop-sidebar" aria-label="Fundza navigation">
+        <div className="fd-sidebar-inner">
+          <Link href="/" className="fd-shell-brand fd-sidebar-brand" aria-label="Fundza home">
+            <span className="fd-shell-logo" aria-hidden="true">F</span>
+            <span>Fundza</span>
+          </Link>
+
+          <nav className="fd-sidebar-nav" aria-label="Primary navigation">
+            {primaryLinks.map((item) => {
+              const active = isActivePath(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`fd-sidebar-link${active ? ' active' : ''}`}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  <span className="fd-sidebar-icon" aria-hidden="true"><AppIcon name={item.icon} size={18} /></span>
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="fd-sidebar-spacer" />
+          <div className="fd-sidebar-footer">
+            <Link href="/profile">
+              <span className="fd-sidebar-icon" aria-hidden="true"><AppIcon name="user" size={18} /></span>
+              <span>Profile & settings</span>
+            </Link>
           </div>
-        </header>
-        <nav className="mobile-nav" aria-label="Mobile navigation">
-          {primaryLinks.slice(0, 5).map(({ href, label }) => <Link key={href} href={href} className={isActivePath(pathname, href) ? 'active' : ''} aria-current={isActivePath(pathname, href) ? 'page' : undefined}>{label}</Link>)}
-        </nav>
-      </>}
-      <main id="main-content">{children}</main>
-    </>
+        </div>
+      </aside>
+
+      <header className="fd-mobile-header">
+        <Link href="/" className="fd-shell-brand" aria-label="Fundza home">
+          <span className="fd-shell-logo" aria-hidden="true">F</span>
+          <span>Fundza</span>
+        </Link>
+        <Link href="/profile" className="fd-shell-profile" aria-label="Open profile">
+          <AppIcon name="user" size={17} />
+        </Link>
+      </header>
+
+      <div className="fd-main-frame">
+        <main id="main-content">{children}</main>
+      </div>
+
+      <nav className="fd-mobile-bottom" aria-label="Mobile navigation">
+        {mobileLinks.map((item) => {
+          const active = isActivePath(pathname, item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`fd-mobile-link${active ? ' active' : ''}`}
+              aria-current={active ? 'page' : undefined}
+            >
+              <span className="fd-mobile-icon" aria-hidden="true"><AppIcon name={item.icon} size={18} /></span>
+              <span className="fd-mobile-label">{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
+  ) : (
+    <main id="main-content">{children}</main>
   );
+
+  return shell;
 }
