@@ -32,67 +32,31 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [checkingLegal, setCheckingLegal] = useState(true);
   const [showNav, setShowNav] = useState(false);
-
   const isLegalRoute = useMemo(() => pathname === '/legal' || pathname.startsWith('/legal/'), [pathname]);
 
   useEffect(() => {
     let cancelled = false;
-
     const checkAccess = async () => {
       if (isPublicRoute(pathname)) {
-        setShowNav(false);
-        setCheckingLegal(false);
-        return;
+        setShowNav(false); setCheckingLegal(false); return;
       }
-
       const { data: { user } } = await supabase.auth.getUser();
       if (cancelled) return;
-
-      if (!user) {
-        setShowNav(false);
-        setCheckingLegal(false);
-        return;
-      }
-
-      const { data: docs, error: docsError } = await supabase
-        .from('legal_documents')
-        .select('document_type, version')
-        .eq('required', true);
-
-      if (docsError) {
-        console.error('Unable to verify legal compliance', docsError);
-        setShowNav(true);
-        setCheckingLegal(false);
-        return;
-      }
-
-      const { data: acceptances, error: acceptanceError } = await supabase
-        .from('legal_acceptances')
-        .select('document_type, document_version')
-        .eq('user_id', user.id);
-
-      if (acceptanceError) {
-        console.error('Unable to load legal acceptances', acceptanceError);
-        setShowNav(true);
-        setCheckingLegal(false);
-        return;
-      }
-
+      if (!user) { setShowNav(false); setCheckingLegal(false); return; }
+      const { data: docs, error: docsError } = await supabase.from('legal_documents').select('document_type, version').eq('required', true);
+      if (docsError) { console.error('Unable to verify legal compliance', docsError); setShowNav(true); setCheckingLegal(false); return; }
+      const { data: acceptances, error: acceptanceError } = await supabase.from('legal_acceptances').select('document_type, document_version').eq('user_id', user.id);
+      if (acceptanceError) { console.error('Unable to load legal acceptances', acceptanceError); setShowNav(true); setCheckingLegal(false); return; }
       const accepted = new Set((acceptances || []).map((item) => `${item.document_type}:${item.document_version}`));
       const missing = REQUIRED_DOCUMENTS.some((type) => {
         const doc = (docs || []).find((item) => item.document_type === type);
         return !doc || !accepted.has(`${type}:${doc.version}`);
       });
-
       if (missing && !isLegalRoute && pathname !== '/profile') {
-        router.replace(`/legal/accept?returnTo=${encodeURIComponent(pathname)}`);
-        return;
+        router.replace(`/legal/accept?returnTo=${encodeURIComponent(pathname)}`); return;
       }
-
-      setShowNav(!isLegalRoute);
-      setCheckingLegal(false);
+      setShowNav(!isLegalRoute); setCheckingLegal(false);
     };
-
     checkAccess();
     return () => { cancelled = true; };
   }, [pathname, router, isLegalRoute]);
@@ -106,45 +70,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, [pathname, router]);
 
-  if (checkingLegal && !isPublicRoute(pathname)) {
-    return <AppLoader message="Checking your account and preparing Fundza..." />;
-  }
+  if (checkingLegal && !isPublicRoute(pathname)) return <AppLoader message="Checking your account and preparing Fundza..." />;
 
   return (
     <>
-      {showNav && (
-        <>
-          <header className="site-header">
-            <div className="site-header-inner">
-              <Link href="/" className="brand" aria-label="Fundza home">Fundza</Link>
-              <nav className="desktop-nav" aria-label="Primary navigation">
-                {primaryLinks.map(({ href, label }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    aria-current={isActivePath(pathname, href) ? 'page' : undefined}
-                  >
-                    {label}
-                  </Link>
-                ))}
-              </nav>
-            </div>
-          </header>
-          <nav className="mobile-nav" aria-label="Mobile navigation">
-            {primaryLinks.slice(0, 5).map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className={isActivePath(pathname, href) ? 'active' : ''}
-                aria-current={isActivePath(pathname, href) ? 'page' : undefined}
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
-        </>
-      )}
-      <div id="main-content">{children}</div>
+      {showNav && <>
+        <header className="site-header">
+          <div className="site-header-inner">
+            <Link href="/" className="brand" aria-label="Fundza home">Fundza</Link>
+            <nav className="desktop-nav" aria-label="Primary navigation">
+              {primaryLinks.map(({ href, label }) => <Link key={href} href={href} aria-current={isActivePath(pathname, href) ? 'page' : undefined}>{label}</Link>)}
+            </nav>
+          </div>
+        </header>
+        <nav className="mobile-nav" aria-label="Mobile navigation">
+          {primaryLinks.slice(0, 5).map(({ href, label }) => <Link key={href} href={href} className={isActivePath(pathname, href) ? 'active' : ''} aria-current={isActivePath(pathname, href) ? 'page' : undefined}>{label}</Link>)}
+        </nav>
+      </>}
+      <main id="main-content">{children}</main>
     </>
   );
 }
