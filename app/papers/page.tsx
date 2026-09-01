@@ -42,7 +42,10 @@ export default function PapersPage() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const task = queueMicrotask(() => { void load(); });
+    return () => { void task; };
+  }, [load]);
 
   return (
     <main className="container" style={{ paddingBottom: '6rem' }}>
