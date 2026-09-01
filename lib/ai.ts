@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 
 const gatewayApiKey = process.env.AI_GATEWAY_API_KEY || '';
 const gatewayBaseUrl = (process.env.AI_GATEWAY_BASE_URL || 'https://ai-gateway.vercel.sh/v1').replace(/\/$/, '');
@@ -24,22 +24,23 @@ type GatewayPayload = {
 };
 
 type GatewayError = Error & { status?: number };
+type GeminiError = Error & { status?: number | string; code?: string | number };
 
 export function isAiGatewayConfigured() {
-  return gatewayApiKey.length > 20 && !gatewayApiKey.includes('your-gateway');
+  return gatewayApiKey.length > 20 && !gatewayApiKey.toLowerCase().includes('your-gateway');
 }
 
 export function isGeminiConfigured() {
-  return isAiGatewayConfigured();
+  return geminiApiKey.length > 20 && !geminiApiKey.toLowerCase().includes('your-gemini');
 }
 
 export function isGeminiEmbeddingConfigured() {
-  return geminiApiKey.length > 20 && !geminiApiKey.includes('your-gemini');
+  return isGeminiConfigured();
 }
 
 function geminiClient() {
-  if (!isGeminiEmbeddingConfigured()) throw new Error('GEMINI_API_KEY is not configured');
-  return new GoogleGenAI({ apiKey: geminiApiKey });
+  if (!isGeminiConfigured()) throw new Error('GEMINI_API_KEY is not configured');
+  return new GoogleGenAI({ apiKey: geminiApiKey, httpOptions: { apiVersion: 'v1' } });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -51,60 +52,121 @@ function shouldFallbackModel(error: unknown) {
   const status = typeof candidate.status === 'number' || typeof candidate.status === 'string' ? candidate.status : '';
   const message = typeof candidate.message === 'string' ? candidate.message : '';
   const raw = `${status} ${message}`.toLowerCase();
-  return raw.includes('429') || raw.includes('500') || raw.includes('502') || raw.includes('503') || raw.includes('504') || raw.includes('unavailable') || raw.includes('high demand') || raw.includes('overloaded') || raw.includes('rate limit') || raw.includes('timeout');
+  return raw.includes('429') || raw.includes('500') || raw.includes('502') || raw.includes('503') || raw.includes('504') || raw.includes('unavailable') || raw.includes('high demand') || raw.includes('overloaded') || raw.includes('rate limit') || raw.includes('timeout') || raw.includes('deadline');
 }
 
 async function gatewayChat(messages: GatewayMessage[], model: string, options: { json?: boolean; maxOutputTokens?: number } = {}) {
   if (!isAiGatewayConfigured()) throw new Error('AI_GATEWAY_API_KEY is not configured');
-  const response = await fetch(`${gatewayBaseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${gatewayApiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, max_tokens: options.maxOutputTokens ?? 8192, ...(options.json ? { response_format: { type: 'json_object' } } : {}) }),
-    cache: 'no-store',
-  });
-  const raw = await response.text();
-  let payload: GatewayPayload | null = null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60000);
   try {
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
-    if (isRecord(parsed)) {
-      payload = parsed as GatewayPayload;
+    const response = await fetch(`${gatewayBaseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${gatewayApiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages, max_tokens: options.maxOutputTokens ?? 8192, ...(options.json ? { response_format: { type: 'json_object' } } : {}) }),
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    const raw = await response.text();
+    let payload: GatewayPayload | null = null;
+    try {
+      const parsed: unknown = raw ? JSON.parse(raw) : null;
+      if (isRecord(parsed)) payload = parsed as GatewayPayload;
+    } catch {
+      payload = null;
     }
-  } catch {
-    payload = null;
+    if (!response.ok) {
+      const errorMessage = payload?.error?.message;
+      const message = typeof errorMessage === 'string' ? errorMessage : raw || `AI Gateway request failed with ${response.status}`;
+      const error: GatewayError = new Error(message);
+      error.status = response.status;
+      throw error;
+    }
+    const text = payload?.choices?.[0]?.message?.content;
+    if (typeof text !== 'string' || !text.trim()) throw new Error('AI Gateway returned an empty response');
+    return text;
+  } finally {
+    clearTimeout(timeout);
   }
-  if (!response.ok) {
-    const errorMessage = payload?.error?.message;
-    const message = typeof errorMessage === 'string' ? errorMessage : raw || `AI Gateway request failed with ${response.status}`;
-    const error: GatewayError = new Error(message);
-    error.status = response.status;
-    throw error;
-  }
-  const text = payload?.choices?.[0]?.message?.content;
-  if (typeof text !== 'string' || !text.trim()) throw new Error('AI Gateway returned an empty response');
-  return text;
 }
 
 async function withGatewayFallback<T>(operation: (model: string) => Promise<T>, allowFallback = true): Promise<T> {
-  try { return await operation(AI_MODEL); }
-  catch (error) {
+  try {
+    return await operation(AI_MODEL);
+  } catch (error) {
     if (!allowFallback || AI_MODEL === AI_FALLBACK_MODEL || !shouldFallbackModel(error)) throw error;
     console.warn(`AI Gateway model ${AI_MODEL} unavailable; retrying with ${AI_FALLBACK_MODEL}.`);
     return operation(AI_FALLBACK_MODEL);
   }
 }
 
-function parseJsonResponse<T>(text: string): T {
-  const trimmed = text.trim();
-  if (!trimmed) throw new Error('AI Gateway returned an empty response');
-  const unfenced = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  try { return JSON.parse(unfenced) as T; } catch {
-    const start = unfenced.indexOf('{'); const end = unfenced.lastIndexOf('}');
-    if (start >= 0 && end > start) return JSON.parse(unfenced.slice(start, end + 1)) as T;
-    throw new Error('AI Gateway returned invalid JSON');
+async function withGeminiFallback<T>(operation: (model: string) => Promise<T>): Promise<T> {
+  try {
+    return await operation(GEMINI_MODEL);
+  } catch (error) {
+    if (GEMINI_MODEL === GEMINI_FALLBACK_MODEL || !shouldFallbackModel(error)) throw error;
+    console.warn(`Gemini model ${GEMINI_MODEL} unavailable; retrying with ${GEMINI_FALLBACK_MODEL}.`);
+    return operation(GEMINI_FALLBACK_MODEL);
   }
 }
 
+function parseJsonResponse<T>(text: string): T {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error('AI provider returned an empty response');
+  const unfenced = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  try {
+    return JSON.parse(unfenced) as T;
+  } catch {
+    const start = unfenced.indexOf('{');
+    const end = unfenced.lastIndexOf('}');
+    if (start >= 0 && end > start) return JSON.parse(unfenced.slice(start, end + 1)) as T;
+    throw new Error('AI provider returned invalid JSON');
+  }
+}
+
+function schemaForGemini(schema: Record<string, unknown>) {
+  return schema as Parameters<GoogleGenAI['models']['generateContent']>[0]['config'] extends infer _T ? Record<string, unknown> : never;
+}
+
+async function generateGeminiJsonInternal<T>(input: string, schema: Record<string, unknown>): Promise<T> {
+  const ai = geminiClient();
+  const schemaText = JSON.stringify(schema);
+  return withGeminiFallback(async model => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: `${input}\n\nReturn ONLY valid JSON matching this schema. Do not wrap it in markdown.\nSCHEMA:\n${schemaText}`,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schemaForGemini(schema),
+          thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+        },
+      });
+      return parseJsonResponse<T>(response.text || '');
+    } catch (error) {
+      const candidate = error as GeminiError;
+      if (candidate?.message?.toLowerCase().includes('aborted')) {
+        throw Object.assign(new Error('Gemini request timed out'), { code: 'AI_TIMEOUT' });
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  });
+}
+
 export async function generateJson<T>(input: string, schema: Record<string, unknown>): Promise<T> {
+  if (isGeminiConfigured()) {
+    try {
+      return await generateGeminiJsonInternal<T>(input, schema);
+    } catch (error) {
+      if (!isAiGatewayConfigured() || !shouldFallbackModel(error)) throw error;
+      console.warn('Gemini JSON generation failed; falling back to AI Gateway.');
+    }
+  }
+  if (!isAiGatewayConfigured()) throw new Error('No AI provider is configured');
   const schemaText = JSON.stringify(schema);
   const prompt = `${input}\n\nReturn ONLY valid JSON matching this schema. Do not wrap it in markdown.\nSCHEMA:\n${schemaText}`;
   const text = await withGatewayFallback((model) => gatewayChat([
@@ -115,23 +177,32 @@ export async function generateJson<T>(input: string, schema: Record<string, unkn
 }
 
 export async function generateMultimodalJson<T>(prompt: string, fileData: string, mimeType: string, schema: Record<string, unknown>): Promise<T> {
-  if (!mimeType.startsWith('image/')) throw new Error('AI Gateway free multimodal mode currently supports image input only');
+  if (!isGeminiConfigured()) {
+    throw new Error('GEMINI_API_KEY is not configured');
+  }
+  const ai = geminiClient();
   const schemaText = JSON.stringify(schema);
-  const messages: GatewayMessage[] = [{ role: 'user', content: [
-    { type: 'text', text: `${prompt}\n\nReturn ONLY valid JSON matching this schema.\nSCHEMA:\n${schemaText}` },
-    { type: 'image_url', image_url: { url: `data:${mimeType};base64,${fileData}` } },
-  ] }];
-  const text = await withGatewayFallback((model) => gatewayChat(messages, model, { json: true }), false);
-  return parseJsonResponse<T>(text);
+  return withGeminiFallback(async model => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [
+        { text: `${prompt}\n\nReturn ONLY valid JSON matching this schema. Do not wrap it in markdown.\nSCHEMA:\n${schemaText}` },
+        { inlineData: { data: fileData, mimeType } },
+      ],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: schemaForGemini(schema),
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+      },
+    });
+    return parseJsonResponse<T>(response.text || '');
+  });
 }
 
 export async function generateUploadedFileJson<T>(prompt: string, filePath: string, mimeType: string, schema: Record<string, unknown>): Promise<T> {
-  if (mimeType.startsWith('image/')) {
-    const { promises: fs } = await import('node:fs');
-    const data = (await fs.readFile(filePath)).toString('base64');
-    return generateMultimodalJson(prompt, data, mimeType, schema);
-  }
-  throw new Error('PDF_GATEWAY_UNSUPPORTED');
+  const { promises: fs } = await import('node:fs');
+  const data = (await fs.readFile(filePath)).toString('base64');
+  return generateMultimodalJson(prompt, data, mimeType, schema);
 }
 
 export async function embedText(text: string, title?: string) {
