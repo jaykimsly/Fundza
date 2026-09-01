@@ -3,6 +3,7 @@ import "./responsive.css";
 import "./design-system.css";
 import "./shell.css";
 import "./dashboard.css";
+import "./landing/landing.css";
 import AppShell from "@/components/AppShell";
 
 export const metadata = {
