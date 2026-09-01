@@ -53,10 +53,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const { data: docs, error: docsError } = await supabase
-        .from('legal_documents')
-        .select('document_type, version')
-        .eq('required', true);
+      const { data: docs, error: docsError } = await supabase.from('legal_documents').select('document_type, version').eq('required', true);
       if (docsError) {
         console.error('Unable to verify legal compliance', docsError);
         setShowNav(true);
@@ -64,10 +61,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const { data: acceptances, error: acceptanceError } = await supabase
-        .from('legal_acceptances')
-        .select('document_type, document_version')
-        .eq('user_id', user.id);
+      const { data: acceptances, error: acceptanceError } = await supabase.from('legal_acceptances').select('document_type, document_version').eq('user_id', user.id);
       if (acceptanceError) {
         console.error('Unable to load legal acceptances', acceptanceError);
         setShowNav(true);
@@ -103,70 +97,36 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, [pathname, router]);
 
-  if (checkingLegal && !isPublicRoute(pathname)) {
-    return <AppLoader message="Checking your account and preparing Fundza..." />;
-  }
+  if (checkingLegal && !isPublicRoute(pathname)) return <AppLoader message="Checking your account and preparing Fundza..." />;
 
   const shell = showNav ? (
     <div className="fd-app-shell">
       <aside className="fd-desktop-sidebar" aria-label="Fundza navigation">
         <div className="fd-sidebar-inner">
-          <Link href="/" className="fd-shell-brand fd-sidebar-brand" aria-label="Fundza home">
-            <span className="fd-shell-logo" aria-hidden="true">F</span>
-            <span>Fundza</span>
-          </Link>
-
+          <Link href="/" className="fd-shell-brand fd-sidebar-brand" aria-label="Fundza home"><span className="fd-shell-logo" aria-hidden="true">F</span><span>Fundza</span></Link>
           <nav className="fd-sidebar-nav" aria-label="Primary navigation">
             {primaryLinks.map((item) => {
               const active = isActivePath(pathname, item.href);
-              return (
-                <Link key={item.href} href={item.href} className={`fd-sidebar-link${active ? ' active' : ''}`} aria-current={active ? 'page' : undefined}>
-                  <span className="fd-sidebar-icon" aria-hidden="true"><AppIcon name={item.icon} size={18} /></span>
-                  <span>{item.label}</span>
-                </Link>
-              );
+              return <Link key={item.href} href={item.href} className={`fd-sidebar-link${active ? ' active' : ''}`} aria-current={active ? 'page' : undefined}><span className="fd-sidebar-icon" aria-hidden="true"><AppIcon name={item.icon} size={18} /></span><span>{item.label}</span></Link>;
             })}
           </nav>
-
           <div className="fd-sidebar-spacer" />
-          <div className="fd-sidebar-footer">
-            <Link href="/profile">
-              <span className="fd-sidebar-icon" aria-hidden="true"><AppIcon name="user" size={18} /></span>
-              <span>Profile & settings</span>
-            </Link>
-          </div>
+          <div className="fd-sidebar-footer"><Link href="/profile"><span className="fd-sidebar-icon" aria-hidden="true"><AppIcon name="user" size={18} /></span><span>Profile & settings</span></Link></div>
         </div>
       </aside>
 
-      <header className="fd-mobile-header">
-        <Link href="/" className="fd-shell-brand" aria-label="Fundza home">
-          <span className="fd-shell-logo" aria-hidden="true">F</span>
-          <span>Fundza</span>
-        </Link>
-        <Link href="/profile" className="fd-shell-profile" aria-label="Open profile">
-          <AppIcon name="user" size={17} />
-        </Link>
-      </header>
+      <header className="fd-mobile-header"><Link href="/" className="fd-shell-brand" aria-label="Fundza home"><span className="fd-shell-logo" aria-hidden="true">F</span><span>Fundza</span></Link><Link href="/profile" className="fd-shell-profile" aria-label="Open profile"><AppIcon name="user" size={17} /></Link></header>
 
-      <div className="fd-main-frame">
-        <main id="main-content">{children}</main>
-      </div>
+      <div className="fd-main-frame"><main id="main-content">{children}</main></div>
 
-      <nav className="fd-mobile-bottom" aria-label="Mobile navigation">
+      <nav className="fd-mobile-bottom mobile-nav" aria-label="Mobile navigation">
         {mobileLinks.map((item) => {
           const active = isActivePath(pathname, item.href);
-          return (
-            <Link key={item.href} href={item.href} className={`fd-mobile-link${active ? ' active' : ''}`} aria-current={active ? 'page' : undefined}>
-              <span className="fd-mobile-icon" aria-hidden="true"><AppIcon name={item.icon} size={18} /></span>
-              <span className="fd-mobile-label">{item.label}</span>
-            </Link>
-          );
+          return <Link key={item.href} href={item.href} className={`fd-mobile-link${active ? ' active' : ''}`} aria-current={active ? 'page' : undefined}><span className="fd-mobile-icon" aria-hidden="true"><AppIcon name={item.icon} size={18} /></span><span className="fd-mobile-label">{item.label}</span></Link>;
         })}
       </nav>
     </div>
-  ) : (
-    <main id="main-content">{children}</main>
-  );
+  ) : <main id="main-content">{children}</main>;
 
   return shell;
 }
