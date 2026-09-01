@@ -1,0 +1,46 @@
+/* Fundza V2 Phase 14 shell: desktop sidebar, compact mobile header and bottom navigation. */
+.fd-app-shell { min-height: 100dvh; }
+.fd-desktop-sidebar { display: none; }
+.fd-mobile-header { position: sticky; top: 0; z-index: 80; display: flex; height: 60px; align-items: center; justify-content: space-between; padding: 0 var(--fd-gutter-mobile); background: color-mix(in srgb, var(--fd-surface) 94%, transparent); border-bottom: 1px solid var(--fd-border); backdrop-filter: blur(16px); }
+.fd-shell-brand { display: inline-flex; align-items: center; gap: .55rem; color: var(--fd-text); text-decoration: none; font-size: 1.2rem; font-weight: 850; letter-spacing: -.045em; }
+.fd-shell-logo { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 10px; color: #fff; background: linear-gradient(145deg, var(--fd-brand), var(--fd-color-brand-600)); box-shadow: 0 7px 16px color-mix(in srgb, var(--fd-brand) 22%, transparent); font-size: .9rem; font-weight: 900; }
+.fd-shell-profile { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; border: 1px solid var(--fd-border); border-radius: 50%; color: var(--fd-brand-strong); background: var(--fd-brand-soft); text-decoration: none; font-size: .72rem; font-weight: 850; }
+.fd-sidebar-inner { position: sticky; top: 0; display: flex; min-height: 100dvh; flex-direction: column; padding: 1.25rem .875rem; }
+.fd-sidebar-brand { margin: 0 0 2rem; padding: 0 .5rem; }
+.fd-sidebar-nav { display: grid; gap: .3rem; }
+.fd-sidebar-link { display: flex; align-items: center; gap: .7rem; min-height: 44px; padding: .65rem .75rem; border-radius: 12px; color: var(--fd-text-muted); text-decoration: none; font-size: .84rem; font-weight: 700; }
+.fd-sidebar-link:hover { color: var(--fd-brand-strong); background: var(--fd-brand-soft); }
+.fd-sidebar-link.active { color: var(--fd-brand-strong); background: var(--fd-brand-soft); box-shadow: inset 3px 0 0 var(--fd-brand); }
+.fd-sidebar-icon { display: grid; width: 30px; height: 30px; flex: 0 0 30px; place-items: center; border-radius: 9px; }
+.fd-sidebar-link.active .fd-sidebar-icon { color: var(--fd-brand); background: var(--fd-surface); box-shadow: var(--fd-shadow-xs); }
+.fd-sidebar-spacer { flex: 1; }
+.fd-sidebar-footer { border-top: 1px solid var(--fd-border); padding-top: 1rem; margin-top: 1rem; }
+.fd-sidebar-footer a { display: flex; align-items: center; gap: .7rem; padding: .65rem .75rem; color: var(--fd-text-muted); text-decoration: none; font-size: .8rem; font-weight: 650; border-radius: 10px; }
+.fd-sidebar-footer a:hover { background: var(--fd-surface-muted); color: var(--fd-text); }
+.fd-main-frame { min-width: 0; }
+.fd-mobile-bottom { position: fixed; left: 0; right: 0; bottom: 0; z-index: 90; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: .2rem; padding: .45rem .55rem calc(.45rem + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--fd-surface) 96%, transparent); border-top: 1px solid var(--fd-border); box-shadow: 0 -8px 24px rgba(17,19,26,.06); backdrop-filter: blur(18px); }
+.fd-mobile-link { display: flex; min-width: 0; min-height: 58px; flex-direction: column; align-items: center; justify-content: center; gap: .2rem; border-radius: 12px; color: var(--fd-text-subtle); text-decoration: none; font-size: .62rem; font-weight: 750; }
+.fd-mobile-link.active { color: var(--fd-brand-strong); background: var(--fd-brand-soft); }
+.fd-mobile-icon { display: grid; width: 26px; height: 26px; place-items: center; }
+.fd-mobile-label { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 639px) {
+  body { padding-bottom: calc(var(--fd-mobile-nav) + env(safe-area-inset-bottom)); }
+  #main-content { min-width: 0; overflow-x: clip; }
+}
+
+@media (min-width: 640px) and (max-width: 959px) {
+  .fd-mobile-header { height: 68px; }
+  .fd-mobile-link { font-size: .68rem; }
+}
+
+@media (min-width: 960px) {
+  body { padding-bottom: 0 !important; }
+  .fd-desktop-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 70; display: block; width: var(--fd-sidebar); background: var(--fd-surface); border-right: 1px solid var(--fd-border); }
+  .fd-mobile-header, .fd-mobile-bottom { display: none; }
+  .fd-main-frame { min-height: 100dvh; margin-left: var(--fd-sidebar); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fd-sidebar-link, .fd-mobile-link { transition: none; }
+}
