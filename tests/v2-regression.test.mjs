@@ -9,9 +9,9 @@ test('V2 quality gates are defined', async () => {
 });
 
 test('mobile navigation is implemented as a bounded five-item layout', async () => {
-  const css = await (await import('node:fs/promises')).readFile('app/responsive.css', 'utf8');
-  assert.match(css, /grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
-  assert.match(css, /overflow-x:hidden/);
+  const css = await (await import('node:fs/promises')).readFile('app/shell.css', 'utf8');
+  assert.match(css, /grid-template-columns:\s*repeat\(5,minmax\(0,1fr\)\)/);
+  assert.match(css, /overflow-x:\s*(hidden|clip)/);
 });
 
 test('app shell exposes semantic main content and mobile navigation', async () => {
