@@ -157,7 +157,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <main id="main-content">{children}</main>
       </div>
 
-      <nav className="fd-mobile-bottom" aria-label="Mobile navigation">
+      <nav className="fd-mobile-bottom mobile-nav" aria-label="Mobile navigation">
         {mobileLinks.map((item) => {
           const active = isActivePath(pathname, item.href);
           return (
