@@ -16,6 +16,7 @@ export default function PaperUploadPage() {
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [examType, setExamType] = useState('NSC');
   const [province, setProvince] = useState('');
+  const [visibility, setVisibility] = useState<'private' | 'fundza'>('private');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -44,16 +45,17 @@ export default function PaperUploadPage() {
       form.append('year', year);
       form.append('examType', examType);
       form.append('province', province);
+      form.append('visibility', visibility);
       const response = await fetch('/api/papers/submit', { method: 'POST', body: form });
       const payload = await response.json().catch(() => null);
       if (!response.ok || payload?.success === false) {
-        setError(payload?.error || 'The question paper could not be submitted.');
+        setError(payload?.error || 'The question paper could not be uploaded.');
         return;
       }
       if (payload?.duplicate) {
         setStatus('This paper is already in Fundza, so we did not create a duplicate.');
       } else {
-        setStatus('Paper submitted for review. It will stay unavailable to other learners until verified.');
+        setStatus(visibility === 'fundza' ? 'Paper submitted for review. It stays unavailable to other learners until verified.' : 'Paper stored privately in your recent uploads.');
         setFile(null);
       }
     } catch {
@@ -64,11 +66,14 @@ export default function PaperUploadPage() {
   }
 
   return (
-    <main className="container">
+    <main className="container" style={{ paddingBottom: '6rem' }}>
       <header style={{ marginBottom: '1.25rem' }}>
-        <Link href="/upload" style={{ fontSize: '.9rem' }}>← Back to Review</Link>
-        <h1 style={{ marginTop: '.75rem' }}>Share a past paper</h1>
-        <p style={{ color: '#64748b' }}>Upload an old paper for the Fundza question bank. New contributions are reviewed before other learners can use them.</p>
+        <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
+          <Link href="/upload" style={{ fontSize: '.9rem' }}>← Review</Link>
+          <Link href="/papers" style={{ fontSize: '.9rem' }}>My uploads</Link>
+        </div>
+        <h1 style={{ marginTop: '.75rem' }}>Upload a past paper</h1>
+        <p style={{ color: '#64748b' }}>Your upload is private by default. You can submit it to Fundza for review and sharing with other learners.</p>
       </header>
       <form onSubmit={submit} className="card" style={{ display: 'grid', gap: '1rem' }}>
         <label>Grade<select value={grade} onChange={e => setGrade(e.target.value)} disabled={submitting}><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></label>
@@ -76,12 +81,16 @@ export default function PaperUploadPage() {
         <label>Year<input type="number" min="2000" max={new Date().getFullYear() + 1} value={year} onChange={e => setYear(e.target.value)} disabled={submitting} /></label>
         <label>Exam type<select value={examType} onChange={e => setExamType(e.target.value)} disabled={submitting}><option>NSC</option><option>June</option><option>Trial</option><option>Preparatory</option><option>School</option><option>Other</option></select></label>
         <label>Province (optional)<input value={province} onChange={e => setProvince(e.target.value)} placeholder="e.g. Mpumalanga" disabled={submitting} /></label>
+        <fieldset style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '.85rem' }}>
+          <legend style={{ padding: '0 .35rem', fontWeight: 600 }}>Sharing</legend>
+          <div style={{ display: 'grid', gap: '.6rem' }}>
+            <label style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start' }}><input type="radio" name="visibility" value="private" checked={visibility === 'private'} onChange={() => setVisibility('private')} disabled={submitting} /> <span><strong>Private</strong><br /><small>Only you can access this upload.</small></span></label>
+            <label style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start' }}><input type="radio" name="visibility" value="fundza" checked={visibility === 'fundza'} onChange={() => setVisibility('fundza')} disabled={submitting} /> <span><strong>Share with Fundza</strong><br /><small>Send it for review. It is shared only after verification.</small></span></label>
+          </div>
+        </fieldset>
         <label>Question paper<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e => setFile(e.target.files?.[0] || null)} disabled={submitting} /></label>
         {file && <p style={{ fontSize: '.9rem', color: '#475569', overflowWrap: 'anywhere' }}>{file.name}</p>}
-        <div style={{ padding: '.8rem', borderRadius: '10px', background: '#f8fafc', fontSize: '.9rem' }}>
-          The upload is private to you until submitted. Fundza sharing starts in review, and only verified contributions are published to other learners.
-        </div>
-        <button className="btn" type="submit" disabled={submitting}>{submitting ? 'Submitting…' : 'Submit for review'}</button>
+        <button className="btn" type="submit" disabled={submitting}>{submitting ? 'Uploading…' : visibility === 'fundza' ? 'Submit for review' : 'Save privately'}</button>
         {status && <p role="status" style={{ color: '#166534' }}>{status}</p>}
         {error && <p role="alert" style={{ color: '#991b1b' }}>{error}</p>}
       </form>
