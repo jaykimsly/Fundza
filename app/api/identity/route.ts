@@ -74,7 +74,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  let uploadedPaths: string[] = [];
+  const uploadedPaths: string[] = [];
   try {
     const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
