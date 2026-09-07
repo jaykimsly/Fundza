@@ -9,6 +9,7 @@ const read = (file) => readFileSync(path.join(root, file), 'utf8');
 const criticalRoutes = [
   'app/page.tsx',
   'app/landing/page.tsx',
+  'app/api/identity/route.ts',
   'app/study/page.tsx',
   'app/quiz/page.tsx',
   'app/progress/page.tsx',
@@ -57,12 +58,20 @@ test('V2 landing and architecture contracts are present', () => {
   assert.equal(existsSync(path.join(root, 'components/identity/PhotoIdentityCard.tsx')), true);
   assert.equal(existsSync(path.join(root, 'components/identity/PhotoUploader.tsx')), true);
   assert.equal(existsSync(path.join(root, 'components/identity/TemplatePreview.tsx')), true);
+  assert.equal(existsSync(path.join(root, 'components/identity/IdentityOnboarding.tsx')), true);
 
   const landing = read('app/landing/page.tsx');
+  const onboarding = read('components/identity/IdentityOnboarding.tsx');
+  const identityApi = read('app/api/identity/route.ts');
   const shell = read('components/AppShell.tsx');
   const layout = read('app/layout.tsx');
-  assert.match(landing, /PhotoIdentityCard/);
-  assert.match(landing, /slot=\{index \+ 1\}/);
+  assert.match(landing, /IdentityOnboarding/);
+  assert.match(onboarding, /photoOne/);
+  assert.match(onboarding, /photoTwo/);
+  assert.match(identityApi, /student_identity_photos/);
+  assert.match(identityApi, /student-identity/);
+  assert.match(identityApi, /Authentication required/);
+  assert.match(identityApi, /10 \* 1024 \* 1024/);
   assert.match(shell, /PUBLIC_ROUTES/);
   assert.match(shell, /\/landing/);
   assert.match(layout, /\.\.\/styles\/landing\.css/);
