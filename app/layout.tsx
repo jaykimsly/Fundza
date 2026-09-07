@@ -1,5 +1,6 @@
 import "./globals.css";
 import AppShell from "@/components/AppShell";
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 export const metadata = {
   title: 'Fundza — Study smarter. Aim higher.',
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <AppShell>{children}</AppShell>
+        <SpeedInsights />
       </body>
     </html>
   );
