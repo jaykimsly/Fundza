@@ -1,5 +1,4 @@
 import "../styles/globals.css";
-import "../styles/responsive.css";
 import "../styles/design-system.css";
 import "../styles/shell.css";
 import "../styles/dashboard.css";
