@@ -1,11 +1,6 @@
 import Link from 'next/link';
-import PhotoIdentityCard from '@/components/identity/PhotoIdentityCard';
+import IdentityOnboarding from '@/components/identity/IdentityOnboarding';
 import SectionHeader from '@/components/ui/SectionHeader';
-
-const templates = [
-  { name: 'ZENITH', subtitle: 'Focus · Discipline · Freedom', tone: 'light' as const, fallbackLabel: 'Z' },
-  { name: 'NOVA', subtitle: 'Focus · Discipline · Freedom', tone: 'dark' as const, fallbackLabel: 'N' },
-];
 
 export default function LandingPage() {
   return (
@@ -22,7 +17,7 @@ export default function LandingPage() {
 
       <section id="identity" className="fd-landing-section">
         <SectionHeader eyebrow="MAKE IT YOURS" title="Your two-photo identity." description="Fundza starts with the template aesthetic below. Upload two photos when you are ready and your personal images become the visual foundation of your space." />
-        <div className="fd-photo-grid">{templates.map((template, index) => <PhotoIdentityCard key={template.name} slot={index + 1} {...template} />)}</div>
+        <IdentityOnboarding />
       </section>
 
       <section className="fd-landing-showcase" aria-label="Fundza experience">
