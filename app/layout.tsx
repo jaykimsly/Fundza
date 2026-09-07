@@ -1,7 +1,8 @@
-import "./globals.css";
-import "./design-system.css";
-import "./shell.css";
-import "./dashboard.css";
+import "../styles/globals.css";
+import "../styles/design-system.css";
+import "../styles/shell.css";
+import "../styles/dashboard.css";
+import "../styles/landing.css";
 import AppShell from "@/components/AppShell";
 
 export const metadata = {
