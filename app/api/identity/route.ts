@@ -23,14 +23,11 @@ function readWebpDimensions(bytes: Uint8Array) {
   const webp = new TextDecoder().decode(bytes.slice(8, 12));
   if (riff !== 'RIFF' || webp !== 'WEBP') return null;
   const chunk = new TextDecoder().decode(bytes.slice(12, 16));
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (chunk === 'VP8X' && bytes.length >= 30) {
-    return {
-      width: 1 + view.getUintLE(24, 3),
-      height: 1 + view.getUintLE(27, 3),
-    };
-  }
-  return null;
+  if (chunk !== 'VP8X') return null;
+  return {
+    width: 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16),
+    height: 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16),
+  };
 }
 
 function readJpegDimensions(bytes: Uint8Array) {
@@ -95,13 +92,11 @@ export async function GET() {
     const { data: signed, error: signedError } = await admin.storage.from(BUCKET).createSignedUrls(paths, 60 * 60);
     if (signedError) throw signedError;
 
-    return NextResponse.json({
-      identity: {
-        photoOneUrl: signed[0]?.signedUrl ?? null,
-        photoTwoUrl: signed[1]?.signedUrl ?? null,
-        updatedAt: data.updated_at,
-      },
-    });
+    return NextResponse.json({ identity: {
+      photoOneUrl: signed[0]?.signedUrl ?? null,
+      photoTwoUrl: signed[1]?.signedUrl ?? null,
+      updatedAt: data.updated_at,
+    } });
   } catch (error) {
     console.error('identity GET failed', error);
     return jsonError('Unable to load your identity photos.', 500);
@@ -120,9 +115,7 @@ export async function POST(request: Request) {
 
     const form = await request.formData();
     const files = [form.get('photoOne'), form.get('photoTwo')];
-    if (!files.every((value): value is File => value instanceof File)) {
-      return jsonError('Both identity photos are required.', 400);
-    }
+    if (!files.every((value): value is File => value instanceof File)) return jsonError('Both identity photos are required.', 400);
 
     for (const file of files) {
       if (!ALLOWED_TYPES.has(file.type)) return jsonError('Only JPEG, PNG, and WebP images are supported.', 400);
@@ -168,12 +161,10 @@ export async function POST(request: Request) {
     const { data: signed, error: signedError } = await admin.storage.from(BUCKET).createSignedUrls(newPaths, 60 * 60);
     if (signedError) throw signedError;
 
-    return NextResponse.json({
-      identity: {
-        photoOneUrl: signed[0]?.signedUrl ?? null,
-        photoTwoUrl: signed[1]?.signedUrl ?? null,
-      },
-    }, { status: 201 });
+    return NextResponse.json({ identity: {
+      photoOneUrl: signed[0]?.signedUrl ?? null,
+      photoTwoUrl: signed[1]?.signedUrl ?? null,
+    } }, { status: 201 });
   } catch (error) {
     console.error('identity POST failed', error);
     if (uploadedPaths.length) {
