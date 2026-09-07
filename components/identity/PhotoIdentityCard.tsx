@@ -17,19 +17,18 @@ type PhotoIdentityCardProps = {
 };
 
 export default function PhotoIdentityCard({ slot, name, subtitle, tone, templateSrc, fallbackLabel, initialPreview = null, onFileChange }: PhotoIdentityCardProps) {
-  const [preview, setPreview] = useState<string | null>(initialPreview);
+  const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const preview = selectedPreview ?? initialPreview;
 
-  useEffect(() => {
-    setPreview(initialPreview ?? null);
-  }, [initialPreview]);
-
-  useEffect(() => () => { if (preview?.startsWith('blob:')) URL.revokeObjectURL(preview); }, [preview]);
+  useEffect(() => () => {
+    if (selectedPreview?.startsWith('blob:')) URL.revokeObjectURL(selectedPreview);
+  }, [selectedPreview]);
 
   const handleChange = (file: File | null, nextPreview: string | null) => {
-    if (preview?.startsWith('blob:') && preview !== nextPreview) URL.revokeObjectURL(preview);
+    if (selectedPreview?.startsWith('blob:') && selectedPreview !== nextPreview) URL.revokeObjectURL(selectedPreview);
     setFileName(file?.name ?? null);
-    setPreview(nextPreview);
+    setSelectedPreview(nextPreview);
     onFileChange?.(file, nextPreview);
   };
 
