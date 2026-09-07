@@ -61,6 +61,11 @@ textarea {
     border-radius: 14px;
   }
 
+  .bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
   table {
     display: block;
     max-width: 100%;
