@@ -64,6 +64,7 @@ textarea {
   .bottom-nav {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
+    overflow-wrap: anywhere;
   }
 
   table {
