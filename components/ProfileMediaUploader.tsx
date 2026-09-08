@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase';
 import { FundzaBadge, FundzaButton, FundzaCard } from '@/components/Phase14Primitives';
 
 export type ProfileMediaKind = 'avatar' | 'background';
-
 type Props = { studentId: string; initialAvatarUrl?: string | null; initialBackgroundUrl?: string | null };
 type CropState = { kind: ProfileMediaKind; objectUrl: string; image: HTMLImageElement; zoom: number; x: number; y: number };
 
@@ -31,17 +30,17 @@ function geometry(kind: ProfileMediaKind, image: HTMLImageElement, zoom: number)
   const scale = Math.max(CROP_WIDTH / image.naturalWidth, cropHeight / image.naturalHeight) * zoom;
   const width = image.naturalWidth * scale;
   const height = image.naturalHeight * scale;
-  return { cropHeight, width, height, maxX: Math.max(0, (width - CROP_WIDTH) / 2), maxY: Math.max(0, (height - cropHeight) / 2) };
+  return { cropHeight, width, height, maxX: Math.max(0, (width - CROP_WIDTH) / 2), maxY: Math.max(0, (height - cropHeight) / 2), scale };
 }
 
 async function cropToBlob(state: CropState) {
-  const { cropHeight, width, height } = geometry(state.kind, state.image, state.zoom);
+  const { cropHeight, width, height, scale } = geometry(state.kind, state.image, state.zoom);
   const baseX = (CROP_WIDTH - width) / 2 + state.x;
   const baseY = (cropHeight - height) / 2 + state.y;
-  const sourceWidth = Math.min(state.image.naturalWidth, CROP_WIDTH / (width / state.image.naturalWidth));
-  const sourceHeight = Math.min(state.image.naturalHeight, cropHeight / (height / state.image.naturalHeight));
-  const sourceX = Math.max(0, Math.min(state.image.naturalWidth - sourceWidth, -baseX / (width / state.image.naturalWidth)));
-  const sourceY = Math.max(0, Math.min(state.image.naturalHeight - sourceHeight, -baseY / (height / state.image.naturalHeight)));
+  const sourceWidth = Math.min(state.image.naturalWidth, CROP_WIDTH / scale);
+  const sourceHeight = Math.min(state.image.naturalHeight, cropHeight / scale);
+  const sourceX = Math.max(0, Math.min(state.image.naturalWidth - sourceWidth, -baseX / scale));
+  const sourceY = Math.max(0, Math.min(state.image.naturalHeight - sourceHeight, -baseY / scale));
   const output = OUTPUT[state.kind];
   const canvas = document.createElement('canvas');
   canvas.width = output.width;
@@ -51,7 +50,7 @@ async function cropToBlob(state: CropState) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(state.image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, output.width, output.height);
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.9));
+  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/webp', 0.9));
   if (!blob) throw new Error('Could not prepare the cropped image.');
   return { blob, previewUrl: URL.createObjectURL(blob) };
 }
@@ -68,14 +67,12 @@ export default function ProfileMediaUploader({ studentId, initialAvatarUrl, init
   const [error, setError] = useState('');
 
   useEffect(() => { setAvatarUrl(initialAvatarUrl || ''); setBackgroundUrl(initialBackgroundUrl || ''); }, [initialAvatarUrl, initialBackgroundUrl]);
-  useEffect(() => () => revoke(crop?.objectUrl), [crop?.objectUrl]);
-
+  useEffect(() => () => { revoke(crop?.objectUrl); revoke(preview); }, [crop?.objectUrl, preview]);
   useEffect(() => {
     const handler = (event: KeyboardEvent) => { if (event.key === 'Escape' && crop && !saving) setCrop(null); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [crop, saving]);
-
   useEffect(() => {
     if (!crop) return;
     cropToBlob(crop).then(({ previewUrl }) => setPreview(current => { revoke(current); return previewUrl; })).catch(console.error);
@@ -103,20 +100,16 @@ export default function ProfileMediaUploader({ studentId, initialAvatarUrl, init
   };
 
   const updateCrop = (changes: Partial<CropState>) => setCrop(current => current ? { ...current, ...changes } : current);
-
   const dragStart = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!crop) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     dragOrigin.current = { x: event.clientX, y: event.clientY, cropX: crop.x, cropY: crop.y };
     setDragging(true);
   };
-
   const dragMove = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!crop || !dragging) return;
     const { maxX, maxY } = geometry(crop.kind, crop.image, crop.zoom);
-    const nextX = Math.max(-maxX, Math.min(maxX, dragOrigin.current.cropX + event.clientX - dragOrigin.current.x));
-    const nextY = Math.max(-maxY, Math.min(maxY, dragOrigin.current.cropY + event.clientY - dragOrigin.current.y));
-    updateCrop({ x: nextX, y: nextY });
+    updateCrop({ x: Math.max(-maxX, Math.min(maxX, dragOrigin.current.cropX + event.clientX - dragOrigin.current.x)), y: Math.max(-maxY, Math.min(maxY, dragOrigin.current.cropY + event.clientY - dragOrigin.current.y)) });
   };
 
   const saveCrop = async () => {
@@ -127,17 +120,18 @@ export default function ProfileMediaUploader({ studentId, initialAvatarUrl, init
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Your session has expired. Please sign in again.');
       const { blob, previewUrl } = await cropToBlob(crop);
+      revoke(previewUrl);
       const path = `${user.id}/profile/${crop.kind}.webp`;
       const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: 'image/webp', upsert: true, cacheControl: '31536000' });
-      revoke(previewUrl);
       if (uploadError) throw uploadError;
       const { data: existing } = await supabase.from('student_profile_media').select('avatar_path, background_path').eq('student_id', studentId).maybeSingle();
       const payload = { student_id: studentId, avatar_path: crop.kind === 'avatar' ? path : (existing?.avatar_path || null), background_path: crop.kind === 'background' ? path : (existing?.background_path || null) };
       const { error: dbError } = await supabase.from('student_profile_media').upsert(payload, { onConflict: 'student_id' });
       if (dbError) throw dbError;
-      const localPreview = URL.createObjectURL(blob);
-      if (crop.kind === 'avatar') setAvatarUrl(current => { revoke(current.startsWith('blob:') ? current : undefined); return localPreview; });
-      else setBackgroundUrl(current => { revoke(current.startsWith('blob:') ? current : undefined); return localPreview; });
+      const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
+      const persistedUrl = signed?.signedUrl || '';
+      if (crop.kind === 'avatar') setAvatarUrl(persistedUrl);
+      else setBackgroundUrl(persistedUrl);
       setPreview(current => { revoke(current); return ''; });
       revoke(crop.objectUrl);
       setCrop(null);
