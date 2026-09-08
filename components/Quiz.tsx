@@ -12,6 +12,7 @@ interface Props {
   topicId: string | null;
   subjectCode?: string;
   subjectName?: string;
+  mode?: 'subject' | 'mixed' | 'quick';
 }
 
 type LiveAnswer = {
@@ -46,7 +47,7 @@ function toQuestion(q: LiveQuestion): Question {
   };
 }
 
-export default function Quiz({ topicId, subjectCode, subjectName }: Props) {
+export default function Quiz({ topicId, subjectCode, subjectName, mode = 'subject' }: Props) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -100,7 +101,7 @@ export default function Quiz({ topicId, subjectCode, subjectName }: Props) {
       let query = supabase
         .from('questions')
         .select('id, question_text, difficulty, topic_id, question_options(label, option_text), question_answers(correct_answer, explanation, steps)')
-        .limit(20);
+        .limit(mode === 'quick' ? 5 : 100);
 
       if (topicIds !== null) {
         query = topicIds.length ? query.in('topic_id', topicIds) : query.eq('topic_id', '__no_matching_topic__');
@@ -111,20 +112,20 @@ export default function Quiz({ topicId, subjectCode, subjectName }: Props) {
 
       const live = ((data ?? []) as LiveQuestion[])
         .map(toQuestion)
-        .filter((question) => question.correctAnswer);
+        .filter((question) => question.correctAnswer && question.options.length >= 4);
 
       const fallback = topicId
         ? fallbackQuestions.filter((question) => question.topicId === topicId)
-        : fallbackQuestions.slice(0, 5);
-      const selected = live.length ? live : fallback;
+        : mode === 'quick' ? fallbackQuestions.slice(0, 5) : fallbackQuestions;
+      const selected = mode === 'quick' ? live.slice(0, 5) : live;
 
-      setQuestions(selected.length ? selected : fallbackQuestions.slice(0, 3));
+      setQuestions(selected.length ? selected : fallback);
       reset();
     } catch (err: unknown) {
       console.error('Quiz load error:', err);
       const fallback = topicId
         ? fallbackQuestions.filter((question) => question.topicId === topicId)
-        : fallbackQuestions.slice(0, 5);
+        : mode === 'quick' ? fallbackQuestions.slice(0, 5) : fallbackQuestions;
 
       if (fallback.length) {
         setQuestions(fallback);
@@ -139,12 +140,9 @@ export default function Quiz({ topicId, subjectCode, subjectName }: Props) {
   };
 
   useEffect(() => {
-    // This effect intentionally starts the async data-loading lifecycle when the quiz target changes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadQuestions();
-  // loadQuestions is recreated during render and is intentionally scoped to the current quiz target.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topicId, subjectCode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicId, subjectCode, mode]);
 
   const currentQuestion = questions[currentIndex];
 
@@ -197,8 +195,7 @@ export default function Quiz({ topicId, subjectCode, subjectName }: Props) {
 
   useEffect(() => {
     if (showResults && !retryMode) void saveAttempt();
-  // saveAttempt intentionally captures the completed quiz state for this result transition.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showResults, retryMode]);
 
   if (loading) {
@@ -215,7 +212,7 @@ export default function Quiz({ topicId, subjectCode, subjectName }: Props) {
 
   if (showResults) {
     const percentage = Math.round((score / questions.length) * 100);
-    return <div className="card"><h2>{retryMode ? 'Retry Results' : 'Quiz Complete'}</h2>{loadError && <div className="warning-box">{loadError}</div>}<div style={{ textAlign: 'center', padding: '2rem 0' }}><div style={{ fontSize: '3rem', fontWeight: 700 }}>{percentage}%</div><p style={{ color: '#64748b', marginTop: '.5rem' }}>{score} correct out of {questions.length}</p></div>{!retryMode && wrongQuestions.length > 0 && <div style={{ marginBottom: '1.5rem' }}><p style={{ color: '#991b1b', marginBottom: '.75rem' }}>You got {wrongQuestions.length} question{wrongQuestions.length > 1 ? 's' : ''} wrong.</p><button onClick={handleRetry} className="btn btn-secondary">Retry Wrong Questions</button></div>}<div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}><button onClick={loadQuestions} className="btn">Restart Quiz</button><Link href="/study" className="btn btn-secondary">Back to Study</Link><Link href="/progress" className="btn btn-success">View Progress</Link></div></div>;
+    return <div className="card"><h2>{retryMode ? 'Retry Results' : 'Quiz Complete'}</h2>{loadError && <div className="warning-box">{loadError}</div>}<div style={{ textAlign: 'center', padding: '2rem 0' }}><div style={{ fontSize: '3rem', fontWeight: 700 }}>{percentage}%</div><p style={{ color: '#64748b', marginTop: '.5rem' }}>{score} correct out of {questions.length}</p></div>{!retryMode && wrongQuestions.length > 0 && <div style={{ marginBottom: '1.5rem' }}><p style={{ color: '#991b1b', marginBottom: '.75rem' }}>You got {wrongQuestions.length} question{wrongQuestions.length > 1 ? 's' : ''} wrong.</p><button onClick={handleRetry} className="btn btn-secondary">Retry Wrong Questions</button></div>}<div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}><button onClick={loadQuestions} className="btn">Restart Quiz</button><Link href="/quiz" className="btn btn-secondary">Back to Practice</Link><Link href="/progress" className="btn btn-success">View Progress</Link></div></div>;
   }
 
   return <div><div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}><h2>{subjectName ? `${subjectName} Quiz` : 'Quiz'}</h2><span style={{ color: '#64748b', fontSize: '.875rem' }}>Question {currentIndex + 1} / {questions.length}</span></div><div className="card"><QuestionComponent question={currentQuestion} selectedAnswer={selectedAnswer} submitted={submitted} onSelect={setSelectedAnswer} />{!submitted ? <button onClick={handleSubmit} className="btn" disabled={!selectedAnswer}>Submit</button> : <div><div style={{ padding: '1rem', borderRadius: '8px', marginBottom: '1rem', background: selectedAnswer === currentQuestion.correctAnswer ? '#ecfdf5' : '#fef2f2', color: selectedAnswer === currentQuestion.correctAnswer ? '#166534' : '#991b1b', fontWeight: 600 }}>{selectedAnswer === currentQuestion.correctAnswer ? '✓ CORRECT' : '✗ NOT QUITE'}{selectedAnswer !== currentQuestion.correctAnswer && <span style={{ display: 'block', marginTop: '.5rem', fontWeight: 400 }}>Correct answer: {currentQuestion.correctAnswer}</span>}</div><div className="explanation"><strong>Explanation:</strong><p style={{ marginTop: '.5rem' }}>{currentQuestion.explanation}</p>{currentQuestion.steps.length > 0 && <ol className="steps">{currentQuestion.steps.map((step, index) => <li key={index}>{step}</li>)}</ol>}</div><button onClick={handleNext} className="btn">{currentIndex < questions.length - 1 ? 'Next Question' : 'See Results'}</button></div>}</div><div style={{ marginTop: '1rem', textAlign: 'center', color: '#64748b', fontSize: '.875rem' }}>Score so far: {score} / {currentIndex + (submitted ? 1 : 0)}</div></div>;
