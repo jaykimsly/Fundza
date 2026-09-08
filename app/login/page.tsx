@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import AppIcon from '@/components/AppIcon';
+import { FundzaButton, FundzaCard } from '@/components/Phase14Primitives';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,185 +22,71 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/auth/callback` } });
     if (error) setMessage(error.message);
     setLoading(false);
   };
 
   const sendOtp = async () => {
-    if (!email.includes('@')) {
-      setMessage('Please enter a valid email');
-      return;
-    }
-
+    if (!email.includes('@')) { setMessage('Please enter a valid email address.'); return; }
     setLoading(true);
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: false,
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setOtpSent(true);
-      setMessage('Check your email for the login code!');
-    }
-
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: `${window.location.origin}/auth/callback` } });
+    if (error) setMessage(error.message);
+    else { setOtpSent(true); setMessage('Check your email for the login code.'); }
     setLoading(false);
   };
 
   const verifyOtp = async () => {
-    if (otp.length < 6) {
-      setMessage('Enter the 6-digit code');
-      return;
-    }
+    if (otp.length < 6) { setMessage('Enter the 6-digit code.'); return; }
     setLoading(true);
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token: otp,
-      type: 'email',
-    });
-    if (error) {
-      setMessage(error.message);
-    } else {
-      router.push('/');
-    }
+    const { error } = await supabase.auth.verifyOtp({ email, token: otp, type: 'email' });
+    if (error) setMessage(error.message);
+    else router.push('/');
     setLoading(false);
   };
 
+  const messageIsSuccess = message.includes('Check your email') || message.includes('sent');
+
   return (
-    <main className="container" style={{ maxWidth: '420px', paddingTop: '2rem' }}>
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <div style={{ fontSize: '3rem' }}></div>
-        <h1 style={{ fontSize: '1.75rem', marginTop: '0.5rem' }}>Fundza</h1>
-        <p style={{ color: '#64748b', fontSize: '0.9375rem' }}>Your matric study companion</p>
+    <main className="fd-shell-content fd-auth-page">
+      <div className="fd-auth-container">
+        <header className="fd-auth-header">
+          <div className="fd-shell-logo" aria-hidden="true">F</div>
+          <p className="fd-section-label">Fundza</p>
+          <h1>Welcome back.</h1>
+          <p>Sign in to continue your study journey.</p>
+        </header>
+
+        <FundzaCard className="fd-auth-card">
+          <FundzaButton variant="secondary" className="fd-auth-google" onClick={handleGoogleLogin} disabled={loading}>
+            <span aria-hidden="true" className="fd-auth-google-mark">G</span>
+            Continue with Google
+          </FundzaButton>
+
+          <div className="fd-auth-divider"><span>or</span></div>
+
+          {!otpSent ? (
+            <form onSubmit={(event) => { event.preventDefault(); void sendOtp(); }} className="fd-auth-form">
+              <label htmlFor="email">Email address</label>
+              <input id="email" type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="student@gmail.com" autoComplete="email" />
+              <FundzaButton type="submit" disabled={loading}>{loading ? 'Sending…' : 'Send login code'}</FundzaButton>
+            </form>
+          ) : (
+            <form onSubmit={(event) => { event.preventDefault(); void verifyOtp(); }} className="fd-auth-form">
+              <div className="fd-auth-success">Code sent to <strong>{email}</strong></div>
+              <label htmlFor="otp">6-digit login code</label>
+              <input id="otp" type="text" inputMode="numeric" maxLength={6} value={otp} onChange={event => setOtp(event.target.value.replace(/\D/g, ''))} placeholder="123456" autoComplete="one-time-code" className="fd-auth-otp" />
+              <FundzaButton type="submit" disabled={loading}>{loading ? 'Verifying…' : 'Verify & log in'}</FundzaButton>
+              <button type="button" className="fd-auth-text-button" onClick={() => { setOtpSent(false); setOtp(''); setMessage(''); }}>Use a different email</button>
+            </form>
+          )}
+
+          {message && <div className={`fd-auth-message ${messageIsSuccess ? 'is-success' : 'is-error'}`} role="status">{message}</div>}
+        </FundzaCard>
+
+        <p className="fd-auth-legal">By logging in, you agree to Fundza&apos;s student data policy and applicable terms.</p>
+        <p className="fd-auth-support"><AppIcon name="shield" size={14} /> Your account is protected by secure authentication.</p>
       </div>
-
-      <div className="card">
-        <button
-          onClick={handleGoogleLogin}
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '0.875rem',
-            background: 'white',
-            border: '1px solid #e2e8f0',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.75rem',
-            fontSize: '1rem',
-            fontWeight: 500,
-            cursor: 'pointer',
-            color: '#0f172a',
-          }}
-        >
-          <span style={{ fontSize: '1.25rem' }}>G</span>
-          Continue with Google
-        </button>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.25rem 0' }}>
-          <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
-          <span style={{ color: '#94a3b8', fontSize: '0.875rem' }}>or</span>
-          <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
-        </div>
-
-        {!otpSent ? (
-          <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.375rem' }}>
-              Email address
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="student@gmail.com"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '1rem',
-                marginBottom: '0.75rem',
-              }}
-            />
-            <button onClick={sendOtp} disabled={loading} className="btn" style={{ width: '100%' }}>
-              {loading ? 'Sending...' : 'Send Login Code'}
-            </button>
-          </div>
-        ) : (
-          <div>
-            <p style={{ color: '#059669', fontSize: '0.875rem', marginBottom: '0.75rem' }}>
-              Code sent to {email}
-            </p>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.375rem' }}>
-              Enter 6-digit code
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={otp}
-              onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-              placeholder="123456"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '1.25rem',
-                letterSpacing: '0.5em',
-                textAlign: 'center',
-                marginBottom: '0.75rem',
-              }}
-            />
-            <button onClick={verifyOtp} disabled={loading} className="btn" style={{ width: '100%' }}>
-              {loading ? 'Verifying...' : 'Verify & Login'}
-            </button>
-            <button
-              onClick={() => { setOtpSent(false); setOtp(''); setMessage(''); }}
-              style={{
-                width: '100%',
-                marginTop: '0.5rem',
-                background: 'none',
-                border: 'none',
-                color: '#64748b',
-                fontSize: '0.875rem',
-                cursor: 'pointer',
-              }}
-            >
-              Use different email
-            </button>
-          </div>
-        )}
-
-        {message && (
-          <p style={{
-            marginTop: '0.75rem',
-            padding: '0.75rem',
-            borderRadius: '8px',
-            background: message.includes('sent') || message.includes('Code') ? '#ecfdf5' : '#fef2f2',
-            color: message.includes('sent') || message.includes('Code') ? '#166534' : '#991b1b',
-            fontSize: '0.875rem',
-          }}>
-            {message}
-          </p>
-        )}
-      </div>
-
-      <p style={{ textAlign: 'center', color: '#64748b', fontSize: '0.8rem', marginTop: '1.5rem' }}>
-        By logging in, you agree to Fundza&apos;s student data policy.
-      </p>
     </main>
   );
 }
