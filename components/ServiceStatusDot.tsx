@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 
 type Status = 'available' | 'degraded' | 'offline';
 
-const STATUS_META: Record<Status, { label: string; className: string }> = {
-  available: { label: 'Available', className: 'service-status-dot service-status-dot--green' },
-  degraded: { label: 'Limited', className: 'service-status-dot service-status-dot--orange' },
-  offline: { label: 'Offline', className: 'service-status-dot service-status-dot--red' },
+const STATUS_META: Record<Status, { label: string; color: string; shadow: string }> = {
+  available: { label: 'Available', color: '#22c55e', shadow: '0 0 0 4px rgba(34,197,94,.13)' },
+  degraded: { label: 'Limited', color: '#f59e0b', shadow: '0 0 0 4px rgba(245,158,11,.14)' },
+  offline: { label: 'Offline', color: '#ef4444', shadow: '0 0 0 4px rgba(239,68,68,.13)' },
 };
 
 export default function ServiceStatusDot() {
@@ -40,10 +40,18 @@ export default function ServiceStatusDot() {
   const meta = STATUS_META[status];
   return (
     <span
-      className={meta.className}
       title={meta.label}
       aria-label={meta.label}
       role="status"
+      style={{
+        display: 'inline-block',
+        width: '10px',
+        height: '10px',
+        flex: '0 0 10px',
+        borderRadius: '999px',
+        background: meta.color,
+        boxShadow: meta.shadow,
+      }}
     />
   );
 }
