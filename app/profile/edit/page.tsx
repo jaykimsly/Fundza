@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import type { School, Grade, SubjectCatalog } from '@/types';
 import AppLoader from '@/components/AppLoader';
+import { FundzaBadge, FundzaButton, FundzaCard } from '@/components/Phase14Primitives';
+import ProfileMediaUploader from '@/components/ProfileMediaUploader';
+import { supabase } from '@/lib/supabase';
+import type { Grade, School, SubjectCatalog } from '@/types';
 
 export default function EditProfilePage() {
   const router = useRouter();
@@ -21,19 +23,16 @@ export default function EditProfilePage() {
   const [careerPathway, setCareerPathway] = useState('university');
   const [targetDegree, setTargetDegree] = useState('');
   const [targetUni, setTargetUni] = useState('');
-  const [availableSubjects, setAvailableSubjects] = useState<SubjectCatalog[]>([]);
   const [studentSubjects, setStudentSubjects] = useState<any[]>([]);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [backgroundUrl, setBackgroundUrl] = useState('');
 
   const loadSubjects = async (gradeId: string, studentId?: string) => {
     const [{ data: catalog }, { data: saved }] = await Promise.all([
       supabase.from('subjects_catalog').select('*').eq('grade_id', gradeId).eq('curriculum', 'CAPS').order('is_compulsory', { ascending: false }).order('name'),
-      studentId
-        ? supabase.from('student_subjects').select('subject_id, current_percentage, target_percentage, priority').eq('student_id', studentId)
-        : Promise.resolve({ data: [] as any[] }),
+      studentId ? supabase.from('student_subjects').select('subject_id, current_percentage, target_percentage, priority').eq('student_id', studentId) : Promise.resolve({ data: [] as any[] }),
     ]);
-
     const savedMap = new Map((saved || []).map((s: any) => [s.subject_id, s]));
-    setAvailableSubjects(catalog || []);
     setStudentSubjects((catalog || []).map((subject: SubjectCatalog) => {
       const existing = savedMap.get(subject.id);
       return {
@@ -49,21 +48,28 @@ export default function EditProfilePage() {
     }));
   };
 
+  const loadMedia = async (studentId: string) => {
+    const { data: media } = await supabase.from('student_profile_media').select('avatar_path, background_path').eq('student_id', studentId).maybeSingle();
+    if (!media) return;
+    const paths = [media.avatar_path, media.background_path].filter(Boolean) as string[];
+    const signed = await Promise.all(paths.map(path => supabase.storage.from('student-identity').createSignedUrl(path, 3600)));
+    const urls = signed.map(result => result.data?.signedUrl || '');
+    if (media.avatar_path) setAvatarUrl(urls[paths.indexOf(media.avatar_path)] || '');
+    if (media.background_path) setBackgroundUrl(urls[paths.indexOf(media.background_path)] || '');
+  };
+
   useEffect(() => {
     const load = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push('/login'); return; }
       setAuthUser(session.user);
-
       const [{ data: currentStudent, error: studentError }, { data: schoolsData }, { data: gradesData }] = await Promise.all([
         supabase.from('students').select('*').eq('auth_user_id', session.user.id).maybeSingle(),
         supabase.from('schools').select('*').order('name'),
         supabase.from('grades').select('*').order('grade_number'),
       ]);
-
       if (studentError) throw studentError;
       if (!currentStudent) { router.push('/setup'); return; }
-
       setStudent(currentStudent);
       setName(currentStudent.full_name || '');
       setSelectedSchool(currentStudent.school_id || '');
@@ -73,19 +79,11 @@ export default function EditProfilePage() {
       setTargetUni(currentStudent.target_university || '');
       setSchools(schoolsData || []);
       setGrades(gradesData || []);
-
-      if (currentStudent.grade_id) {
-        await loadSubjects(currentStudent.grade_id, currentStudent.id);
-      }
-
+      if (currentStudent.grade_id) await loadSubjects(currentStudent.grade_id, currentStudent.id);
+      await loadMedia(currentStudent.id);
       setLoading(false);
     };
-
-    load().catch(error => {
-      console.error(error);
-      alert('Unable to load your profile.');
-      setLoading(false);
-    });
+    load().catch(error => { console.error(error); setLoading(false); });
   }, [router]);
 
   const changeGrade = async (gradeId: string) => {
@@ -93,54 +91,23 @@ export default function EditProfilePage() {
     await loadSubjects(gradeId, student?.id);
   };
 
-  const toggleSubject = (idx: number) => {
-    setStudentSubjects(prev => prev.map((s, i) => i === idx ? { ...s, selected: !s.selected } : s));
-  };
-
-  const updateMark = (idx: number, field: 'current' | 'target', value: number) => {
-    setStudentSubjects(prev => prev.map((s, i) => i === idx ? { ...s, [field]: Math.min(100, Math.max(0, value)) } : s));
-  };
+  const toggleSubject = (idx: number) => setStudentSubjects(prev => prev.map((subject, index) => index === idx ? { ...subject, selected: !subject.selected } : subject));
+  const updateMark = (idx: number, field: 'current' | 'target', value: number) => setStudentSubjects(prev => prev.map((subject, index) => index === idx ? { ...subject, [field]: Math.min(100, Math.max(0, value)) } : subject));
 
   const handleSave = async () => {
-    const selected = studentSubjects.filter(s => s.selected);
+    const selected = studentSubjects.filter(subject => subject.selected);
     if (!name.trim() || !selectedGrade || selected.length < 6) {
       alert(`Please provide your name and grade, and select at least 6 subjects. Currently selected: ${selected.length}`);
       return;
     }
-
     setSaving(true);
     try {
-      const { data: updatedStudent, error: studentError } = await supabase
-        .from('students')
-        .update({
-          full_name: name.trim(),
-          school_id: selectedSchool || null,
-          grade_id: selectedGrade,
-          career_pathway: careerPathway,
-          target_degree: targetDegree || null,
-          target_university: targetUni || null,
-          profile_completed: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', student.id)
-        .eq('auth_user_id', authUser.id)
-        .select()
-        .single();
-
+      const { data: updatedStudent, error: studentError } = await supabase.from('students').update({ full_name: name.trim(), school_id: selectedSchool || null, grade_id: selectedGrade, career_pathway: careerPathway, target_degree: targetDegree || null, target_university: targetUni || null, profile_completed: true, updated_at: new Date().toISOString() }).eq('id', student.id).eq('auth_user_id', authUser.id).select().single();
       if (studentError || !updatedStudent) throw studentError || new Error('Failed to save profile');
-
       const { error: deleteError } = await supabase.from('student_subjects').delete().eq('student_id', student.id);
       if (deleteError) throw deleteError;
-
-      const { error: subjectError } = await supabase.from('student_subjects').insert(selected.map(s => ({
-        student_id: student.id,
-        subject_id: s.subject_id,
-        current_percentage: s.current,
-        target_percentage: s.target,
-        priority: s.current < 50 ? 'critical' : s.current < 60 ? 'high' : 'medium',
-      })));
+      const { error: subjectError } = await supabase.from('student_subjects').insert(selected.map(subject => ({ student_id: student.id, subject_id: subject.subject_id, current_percentage: subject.current, target_percentage: subject.target, priority: subject.current < 50 ? 'critical' : subject.current < 60 ? 'high' : 'medium' })));
       if (subjectError) throw subjectError;
-
       localStorage.setItem('fundza_student', JSON.stringify(updatedStudent));
       localStorage.setItem('fundza_student_id', updatedStudent.id);
       router.push('/profile');
@@ -155,47 +122,33 @@ export default function EditProfilePage() {
   if (loading) return <AppLoader message="Loading profile editor..." />;
 
   return (
-    <main className="container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-        <div>
-          <h1>Edit Profile</h1>
-          <p style={{ color: '#64748b', fontSize: '0.875rem' }}>Changes are saved only when you press Save Profile.</p>
-        </div>
-        <Link href="/profile" className="btn btn-secondary">Cancel</Link>
-      </div>
+    <main className="fd-learning-page">
+      <header className="fd-page-hero"><div className="fd-page-hero-copy"><p className="fd-kicker">PROFILE SETTINGS</p><h1 className="fd-page-title">Make your Fundza space yours.</h1><p className="fd-page-subtitle">Update your learner details, subjects and the imagery used around your profile. Image changes are previewed and cropped before upload.</p></div><FundzaButton href="/profile" variant="secondary">Back to profile</FundzaButton></header>
 
-      <div className="card">
-        <h2>Personal Details</h2>
-        <div style={{ display: 'grid', gap: '1rem', marginTop: '1rem' }}>
-          <label>Full Name<input value={name} onChange={e => setName(e.target.value)} /></label>
-          <label>School<select value={selectedSchool} onChange={e => setSelectedSchool(e.target.value)}><option value="">Not selected</option>{schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-          <label>Grade<select value={selectedGrade} onChange={e => changeGrade(e.target.value)}>{grades.map(g => <option key={g.id} value={g.id}>Grade {g.grade_number}</option>)}</select></label>
-          <label>Career Pathway<select value={careerPathway} onChange={e => setCareerPathway(e.target.value)}><option value="university">University</option><option value="college">College / TVET</option><option value="both">Both</option><option value="next_grade">Next grade</option></select></label>
-          <label>Target Degree / Course<input value={targetDegree} onChange={e => setTargetDegree(e.target.value)} /></label>
-          <label>Target Institution<input value={targetUni} onChange={e => setTargetUni(e.target.value)} /></label>
-        </div>
-      </div>
+      <div className="fd-learning-stack">
+        <ProfileMediaUploader studentId={student.id} initialAvatarUrl={avatarUrl} initialBackgroundUrl={backgroundUrl} />
 
-      <div className="card">
-        <h2>Subjects</h2>
-        <p style={{ color: '#64748b', fontSize: '0.875rem' }}>These selections drive the Dashboard, Study, Quiz, Exams and Progress sections.</p>
-        <div style={{ display: 'grid', gap: '0.75rem', marginTop: '1rem' }}>
-          {studentSubjects.map((s, idx) => (
-            <div key={s.subject_id} style={{ padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '8px', opacity: s.selected ? 1 : 0.65 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <input type="checkbox" checked={s.selected} disabled={s.is_compulsory} onChange={() => toggleSubject(idx)} />
-                <strong>{s.name}</strong>{s.is_compulsory && <span style={{ color: '#dc2626', fontSize: '0.7rem' }}>COMPULSORY</span>}
-              </label>
-              {s.selected && <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                <label style={{ flex: 1 }}>Current %<input type="number" min="0" max="100" value={s.current} onChange={e => updateMark(idx, 'current', Number(e.target.value))} /></label>
-                <label style={{ flex: 1 }}>Target %<input type="number" min="0" max="100" value={s.target} onChange={e => updateMark(idx, 'target', Number(e.target.value))} /></label>
-              </div>}
-            </div>
-          ))}
-        </div>
-      </div>
+        <FundzaCard className="fd-panel">
+          <div className="fd-panel-heading"><div><p className="fd-kicker">LEARNER DETAILS</p><h2>Personal details</h2><p>These details drive your Study, Exams and Progress context.</p></div><FundzaBadge tone="brand">Account</FundzaBadge></div>
+          <div className="fd-form-grid">
+            <label className="fd-form-field"><span>Full name</span><input value={name} onChange={event => setName(event.target.value)} /></label>
+            <label className="fd-form-field"><span>School</span><select value={selectedSchool} onChange={event => setSelectedSchool(event.target.value)}><option value="">Not selected</option>{schools.map(school => <option key={school.id} value={school.id}>{school.name}</option>)}</select></label>
+            <label className="fd-form-field"><span>Grade</span><select value={selectedGrade} onChange={event => void changeGrade(event.target.value)}>{grades.map(grade => <option key={grade.id} value={grade.id}>Grade {grade.grade_number}</option>)}</select></label>
+            <label className="fd-form-field"><span>Career pathway</span><select value={careerPathway} onChange={event => setCareerPathway(event.target.value)}><option value="university">University</option><option value="college">College / TVET</option><option value="both">Both</option><option value="next_grade">Next grade</option></select></label>
+            <label className="fd-form-field"><span>Target degree / course</span><input value={targetDegree} onChange={event => setTargetDegree(event.target.value)} /></label>
+            <label className="fd-form-field"><span>Target institution</span><input value={targetUni} onChange={event => setTargetUni(event.target.value)} /></label>
+          </div>
+        </FundzaCard>
 
-      <button className="btn" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</button>
+        <FundzaCard className="fd-panel">
+          <div className="fd-panel-heading"><div><p className="fd-kicker">SUBJECT PROFILE</p><h2>Your subjects</h2><p>Selected subjects feed the academic views throughout Fundza.</p></div><FundzaBadge tone="brand">{studentSubjects.filter(subject => subject.selected).length} selected</FundzaBadge></div>
+          <div className="fd-subject-progress-grid">
+            {studentSubjects.map((subject, idx) => <article key={subject.subject_id} className="fd-subject-progress" style={{ opacity: subject.selected ? 1 : .62 }}><label style={{ display: 'flex', alignItems: 'center', gap: '.55rem' }}><input type="checkbox" checked={subject.selected} disabled={subject.is_compulsory} onChange={() => toggleSubject(idx)} /><span className="fd-subject-progress-name">{subject.name}</span>{subject.is_compulsory ? <FundzaBadge tone="warning">Compulsory</FundzaBadge> : null}</label>{subject.selected ? <div className="fd-form-grid" style={{ marginTop: '.65rem', gridTemplateColumns: '1fr 1fr' }}><label className="fd-form-field"><span>Current %</span><input type="number" min="0" max="100" value={subject.current} onChange={event => updateMark(idx, 'current', Number(event.target.value))} /></label><label className="fd-form-field"><span>Target %</span><input type="number" min="0" max="100" value={subject.target} onChange={event => updateMark(idx, 'target', Number(event.target.value))} /></label></div> : null}</article>)}
+          </div>
+        </FundzaCard>
+
+        <div className="fd-action-row"><FundzaButton onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save profile'}</FundzaButton><Link href="/profile" className="fd-button fd-button-ghost">Cancel</Link></div>
+      </div>
     </main>
   );
 }
