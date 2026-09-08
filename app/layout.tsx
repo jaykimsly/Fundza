@@ -3,6 +3,7 @@ import "../styles/design-system.css";
 import "../styles/shell.css";
 import "../styles/dashboard.css";
 import "../styles/landing.css";
+import "../styles/learning.css";
 import AppShell from "@/components/AppShell";
 
 export const metadata = {
