@@ -20,12 +20,9 @@ async function readImage(file: File) { const objectUrl = URL.createObjectURL(fil
 function geometry(kind: ProfileMediaKind, image: HTMLImageElement, zoom: number) { const cropHeight = CROP_WIDTH / ASPECT[kind]; const scale = Math.max(CROP_WIDTH / image.naturalWidth, cropHeight / image.naturalHeight) * zoom; const width = image.naturalWidth * scale; const height = image.naturalHeight * scale; return { cropHeight, width, height, maxX: Math.max(0, (width - CROP_WIDTH) / 2), maxY: Math.max(0, (height - cropHeight) / 2), scale }; }
 async function cropToBlob(state: CropState) {
   const { cropHeight, width, height, scale } = geometry(state.kind, state.image, state.zoom);
-  const baseX = (CROP_WIDTH - width) / 2 + state.x;
-  const baseY = (cropHeight - height) / 2 + state.y;
-  const sourceWidth = Math.min(state.image.naturalWidth, CROP_WIDTH / scale);
-  const sourceHeight = Math.min(state.image.naturalHeight, cropHeight / scale);
-  const sourceX = Math.max(0, Math.min(state.image.naturalWidth - sourceWidth, -baseX / scale));
-  const sourceY = Math.max(0, Math.min(state.image.naturalHeight - sourceHeight, -baseY / scale));
+  const baseX = (CROP_WIDTH - width) / 2 + state.x; const baseY = (cropHeight - height) / 2 + state.y;
+  const sourceWidth = Math.min(state.image.naturalWidth, CROP_WIDTH / scale); const sourceHeight = Math.min(state.image.naturalHeight, cropHeight / scale);
+  const sourceX = Math.max(0, Math.min(state.image.naturalWidth - sourceWidth, -baseX / scale)); const sourceY = Math.max(0, Math.min(state.image.naturalHeight - sourceHeight, -baseY / scale));
   const output = OUTPUT[state.kind]; const canvas = document.createElement('canvas'); canvas.width = output.width; canvas.height = output.height;
   const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('Your browser could not create the image editor.');
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(state.image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, output.width, output.height);
@@ -37,17 +34,17 @@ export default function ProfileMediaUploader({ studentId, initialAvatarUrl, init
   const inputRef = useRef<HTMLInputElement>(null); const dragOrigin = useRef({ x: 0, y: 0, cropX: 0, cropY: 0 });
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl || ''); const [backgroundUrl, setBackgroundUrl] = useState(initialBackgroundUrl || '');
   const [crop, setCrop] = useState<CropState | null>(null); const [preview, setPreview] = useState(''); const [dragging, setDragging] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState('');
-  useEffect(() => { setAvatarUrl(initialAvatarUrl || ''); setBackgroundUrl(initialBackgroundUrl || ''); }, [initialAvatarUrl, initialBackgroundUrl]);
-  useEffect(() => () => { revoke(crop?.objectUrl); revoke(preview); }, [crop?.objectUrl, preview]);
+
+  useEffect(() => () => { revoke(crop?.objectUrl); }, [crop?.objectUrl]);
   useEffect(() => { const handler = (event: KeyboardEvent) => { if (event.key === 'Escape' && crop && !saving) setCrop(null); }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler); }, [crop, saving]);
-  useEffect(() => { if (!crop) return; cropToBlob(crop).then(({ previewUrl }) => setPreview(current => { revoke(current); return previewUrl; })).catch(console.error); }, [crop]);
+  useEffect(() => { if (!crop) return; let cancelled = false; cropToBlob(crop).then(({ previewUrl }) => { if (cancelled) { revoke(previewUrl); return; } setPreview(current => { revoke(current); return previewUrl; }); }).catch(console.error); return () => { cancelled = true; }; }, [crop]);
 
   const title = useMemo(() => crop?.kind === 'avatar' ? 'Adjust profile photo' : 'Adjust profile background', [crop]);
   const openPicker = (kind: ProfileMediaKind) => { setError(''); if (!inputRef.current) return; inputRef.current.dataset.kind = kind; inputRef.current.value = ''; inputRef.current.click(); };
-  const onFile = async (file?: File) => { if (!file) return; if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setError('Please choose a JPG, PNG or WebP image.'); return; } if (file.size > MAX_FILE_BYTES) { setError('Images must be 10 MB or smaller.'); return; } try { const kind = (inputRef.current?.dataset.kind || 'avatar') as ProfileMediaKind; const { objectUrl, image } = await readImage(file); setCrop({ kind, objectUrl, image, zoom: 1, x: 0, y: 0 }); } catch (err) { console.error(err); setError('That image could not be opened. Try another file.'); } };
+  const onFile = async (file?: File) => { if (!file) return; if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setError('Please choose a JPG, PNG or WebP image.'); return; } if (file.size > MAX_FILE_BYTES) { setError('Images must be 10 MB or smaller.'); return; } try { const kind = (inputRef.current?.dataset.kind || 'avatar') as ProfileMediaKind; const { objectUrl, image } = await readImage(file); setPreview(current => { revoke(current); return ''; }); setCrop({ kind, objectUrl, image, zoom: 1, x: 0, y: 0 }); } catch (err) { console.error(err); setError('That image could not be opened. Try another file.'); } };
   const updateCrop = (changes: Partial<CropState>) => setCrop(current => current ? { ...current, ...changes } : current);
   const dragStart = (event: PointerEvent<HTMLDivElement>) => { if (!crop) return; event.currentTarget.setPointerCapture(event.pointerId); dragOrigin.current = { x: event.clientX, y: event.clientY, cropX: crop.x, cropY: crop.y }; setDragging(true); };
-  const dragMove = (event: PointerEvent<HTMLDivElement>) => { if (!crop || !dragging) return; const { maxX, maxY } = geometry(crop.kind, crop.image, crop.zoom); updateCrop({ x: Math.max(-maxX, Math.min(maxX, dragOrigin.current.cropX + event.clientX - dragOrigin.current.x)), y: Math.max(-maxY, Math.min(maxY, dragOrigin.current.cropY + event.clientY - dragOrigin.current.y)) }); };
+  const dragMove = (event: PointerEvent<HTMLDivElement>) => { if (!crop || !dragging) return; const rect = event.currentTarget.getBoundingClientRect(); const { maxX, maxY, cropHeight } = geometry(crop.kind, crop.image, crop.zoom); const dx = (event.clientX - dragOrigin.current.x) * (CROP_WIDTH / rect.width); const dy = (event.clientY - dragOrigin.current.y) * (cropHeight / rect.height); updateCrop({ x: Math.max(-maxX, Math.min(maxX, dragOrigin.current.cropX + dx)), y: Math.max(-maxY, Math.min(maxY, dragOrigin.current.cropY + dy)) }); };
 
   const saveCrop = async () => {
     if (!crop) return; setSaving(true); setError('');
