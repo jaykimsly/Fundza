@@ -42,13 +42,7 @@ export async function checkGeminiAvailability(): Promise<GeminiAvailability> {
   if (geminiHealthCache && geminiHealthCache.expiresAt > now) return geminiHealthCache.value;
 
   if (!isGeminiConfigured()) {
-    const value: GeminiAvailability = {
-      status: 'offline',
-      model: GEMINI_MODEL,
-      fallback_model: GEMINI_FALLBACK_MODEL,
-      checked_at: new Date().toISOString(),
-      error: 'Provider not configured',
-    };
+    const value: GeminiAvailability = { status: 'offline', model: GEMINI_MODEL, fallback_model: GEMINI_FALLBACK_MODEL, checked_at: new Date().toISOString(), error: 'Provider not configured' };
     geminiHealthCache = { expiresAt: now + GEMINI_HEALTH_TTL_MS, value };
     return value;
   }
@@ -56,11 +50,7 @@ export async function checkGeminiAvailability(): Promise<GeminiAvailability> {
   const ai = geminiClient();
   let primaryError = '';
   try {
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: 'Reply with the single word OK.',
-      config: { maxOutputTokens: 4, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } },
-    });
+    const response = await ai.models.generateContent({ model: GEMINI_MODEL, contents: 'Reply with the single word OK.', config: { maxOutputTokens: 4, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } });
     if (response.text?.trim()) {
       const value: GeminiAvailability = { status: 'available', model: GEMINI_MODEL, fallback_model: GEMINI_FALLBACK_MODEL, checked_at: new Date().toISOString() };
       geminiHealthCache = { expiresAt: now + GEMINI_HEALTH_TTL_MS, value };
@@ -73,11 +63,7 @@ export async function checkGeminiAvailability(): Promise<GeminiAvailability> {
 
   if (GEMINI_FALLBACK_MODEL && GEMINI_FALLBACK_MODEL !== GEMINI_MODEL) {
     try {
-      const response = await ai.models.generateContent({
-        model: GEMINI_FALLBACK_MODEL,
-        contents: 'Reply with the single word OK.',
-        config: { maxOutputTokens: 4, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } },
-      });
+      const response = await ai.models.generateContent({ model: GEMINI_FALLBACK_MODEL, contents: 'Reply with the single word OK.', config: { maxOutputTokens: 4, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } });
       if (response.text?.trim()) {
         const value: GeminiAvailability = { status: 'degraded', model: GEMINI_MODEL, fallback_model: GEMINI_FALLBACK_MODEL, checked_at: new Date().toISOString(), error: primaryError };
         geminiHealthCache = { expiresAt: now + GEMINI_HEALTH_TTL_MS, value };
@@ -161,3 +147,35 @@ export async function generateMultimodalJson<T>(prompt: string, fileData: string
     return parseJsonResponse<T>(response.text || '');
   });
 }
+
+export async function generateUploadedFileJson<T>(prompt: string, filePath: string, mimeType: string, schema: Record<string, unknown>): Promise<T> {
+  const { promises: fs } = await import('node:fs');
+  const data = (await fs.readFile(filePath)).toString('base64');
+  return generateMultimodalJson(prompt, data, mimeType, schema);
+}
+
+export async function embedText(text: string, title?: string) {
+  const ai = geminiClient();
+  const result = await ai.models.embedContent({ model: GEMINI_EMBEDDING_MODEL, contents: text, config: { taskType: 'RETRIEVAL_DOCUMENT', title, outputDimensionality: 768, autoTruncate: true } as any });
+  const values = result.embeddings?.[0]?.values;
+  if (!values || values.length !== 768) throw new Error(`Gemini embedding returned ${values?.length ?? 0} dimensions; expected 768`);
+  return values;
+}
+
+export async function embedQuery(text: string) {
+  const ai = geminiClient();
+  const result = await ai.models.embedContent({ model: GEMINI_EMBEDDING_MODEL, contents: text, config: { taskType: 'RETRIEVAL_QUERY', outputDimensionality: 768, autoTruncate: true } as any });
+  const values = result.embeddings?.[0]?.values;
+  if (!values || values.length !== 768) throw new Error('Gemini query embedding failed');
+  return values;
+}
+
+export const reportSchema = { type: 'object', properties: {
+  student_name: { type: ['string', 'null'] }, school_name: { type: ['string', 'null'] }, grade: { type: ['integer', 'null'] }, term: { type: ['string', 'null'] }, overall_summary: { type: 'string' }, overall_average: { type: ['number', 'null'] }, subjects_passed: { type: ['integer', 'null'] }, subjects_failed: { type: ['integer', 'null'] },
+  subjects: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, percentage: { type: ['number', 'null'] }, comment: { type: ['string', 'null'] }, weak_topics: { type: 'array', items: { type: 'string' } }, strong_topics: { type: 'array', items: { type: 'string' } } }, required: ['name', 'percentage', 'comment', 'weak_topics', 'strong_topics'] } },
+  teacher_comments: { type: 'array', items: { type: 'string' } }, overall_recommendations: { type: 'array', items: { type: 'string' } },
+}, required: ['student_name', 'school_name', 'grade', 'term', 'overall_summary', 'overall_average', 'subjects_passed', 'subjects_failed', 'subjects', 'teacher_comments', 'overall_recommendations'] };
+
+export const reportExtractionSchema = { type: 'object', properties: { learner_name: { type: ['string', 'null'] }, school_name: { type: ['string', 'null'] }, grade: { type: ['integer', 'null'] }, term: { type: ['string', 'null'] }, results: { type: 'array', items: { type: 'object', properties: { subject_original: { type: 'string' }, mark: { type: ['number', 'null'] }, mark_type: { type: 'string' }, mark_denominator: { type: ['number', 'null'] }, level: { type: ['string', 'null'] }, source_text: { type: ['string', 'null'] }, confidence: { type: 'number' } }, required: ['subject_original', 'mark', 'mark_type', 'mark_denominator', 'level', 'source_text', 'confidence'] } }, extraction_warnings: { type: 'array', items: { type: 'string' } } }, required: ['learner_name', 'school_name', 'grade', 'term', 'results', 'extraction_warnings'] };
+
+export const quizSchema = { type: 'object', properties: { questions: { type: 'array', minItems: 5, maxItems: 5, items: { type: 'object', properties: { question_text: { type: 'string' }, options: { type: 'array', minItems: 4, maxItems: 4, items: { type: 'object', properties: { label: { type: 'string' }, text: { type: 'string' } }, required: ['label', 'text'] } }, correct_answer: { type: 'string' }, explanation: { type: 'string' }, steps: { type: 'array', items: { type: 'string' } }, difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'] } }, required: ['question_text', 'options', 'correct_answer', 'explanation', 'steps', 'difficulty'] } } }, required: ['questions'] };
