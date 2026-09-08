@@ -8,6 +8,7 @@ import ExamCountdown from '@/components/ExamCountdown';
 import ProgressBar from '@/components/ProgressBar';
 import AppIcon from '@/components/AppIcon';
 import AppLoader from '@/components/AppLoader';
+import ProfileMediaUploader, { type ProfileMediaKind } from '@/components/ProfileMediaUploader';
 import {
   FundzaBadge,
   FundzaButton,
@@ -36,7 +37,38 @@ export default function Dashboard() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [backgroundUrl, setBackgroundUrl] = useState('');
   const [loading, setLoading] = useState(true);
+
+  const loadMedia = async (studentId: string) => {
+    const { data: media, error } = await supabase
+      .from('student_profile_media')
+      .select('avatar_path, background_path')
+      .eq('student_id', studentId)
+      .maybeSingle();
+
+    if (error || !media) return;
+
+    const pathEntries: Array<[ProfileMediaKind, string | null]> = [
+      ['avatar', media.avatar_path],
+      ['background', media.background_path],
+    ];
+    const active = pathEntries.filter(([, path]) => Boolean(path)) as Array<[ProfileMediaKind, string]>;
+    if (!active.length) return;
+
+    const signed = await Promise.all(
+      active.map(async ([kind, path]) => {
+        const { data } = await supabase.storage.from('student-identity').createSignedUrl(path, 3600);
+        return [kind, data?.signedUrl || ''] as const;
+      }),
+    );
+
+    signed.forEach(([kind, url]) => {
+      if (kind === 'avatar') setAvatarUrl(url);
+      if (kind === 'background') setBackgroundUrl(url);
+    });
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -66,10 +98,13 @@ export default function Dashboard() {
       localStorage.setItem('fundza_student', JSON.stringify(student));
       setProfile(student);
 
-      const { data: subjData } = await supabase
-        .from('student_subjects')
-        .select('*, subjects_catalog(name, code, category, is_compulsory)')
-        .eq('student_id', student.id);
+      const [{ data: subjData }] = await Promise.all([
+        supabase
+          .from('student_subjects')
+          .select('*, subjects_catalog(name, code, category, is_compulsory)')
+          .eq('student_id', student.id),
+        loadMedia(student.id),
+      ]);
       setSubjects(subjData || []);
       setLoading(false);
     };
@@ -85,6 +120,11 @@ export default function Dashboard() {
     await supabase.auth.signOut();
     localStorage.clear();
     router.push('/login');
+  };
+
+  const handleMediaSaved = (kind: ProfileMediaKind, signedUrl: string) => {
+    if (kind === 'avatar') setAvatarUrl(signedUrl);
+    if (kind === 'background') setBackgroundUrl(signedUrl);
   };
 
   const aps = subjects
@@ -110,10 +150,15 @@ export default function Dashboard() {
   return (
     <div className="fd-shell-content fd-dashboard">
       <header className="fd-dashboard-head">
-        <div>
-          <p className="fd-dashboard-kicker">Your learning space</p>
-          <h1 className="fd-dashboard-title">Welcome back, {profile?.full_name?.split(' ')?.[0] || 'learner'}.</h1>
-          <p className="fd-dashboard-subtitle">Grade {grade} · {profile?.schools?.name} · {pathway}</p>
+        <div className="fd-dashboard-profile-heading">
+          <div className="fd-dashboard-avatar" aria-hidden="true">
+            {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{profile?.full_name?.charAt(0)?.toUpperCase() || 'F'}</span>}
+          </div>
+          <div>
+            <p className="fd-dashboard-kicker">Your learning space</p>
+            <h1 className="fd-dashboard-title">Welcome back, {profile?.full_name?.split(' ')?.[0] || 'learner'}.</h1>
+            <p className="fd-dashboard-subtitle">Grade {grade} · {profile?.schools?.name} · {pathway}</p>
+          </div>
         </div>
         <div className="fd-dashboard-actions">
           <FundzaButton href="/profile" variant="secondary"><AppIcon name="user" size={16} /> Profile</FundzaButton>
@@ -121,9 +166,21 @@ export default function Dashboard() {
         </div>
       </header>
 
+      <div className="fd-dashboard-home-media">
+        <ProfileMediaUploader
+          studentId={profile.id}
+          initialAvatarUrl={avatarUrl}
+          initialBackgroundUrl={backgroundUrl}
+          onSaved={handleMediaSaved}
+        />
+      </div>
+
       <div className="fd-dashboard-grid">
         <div className="fd-dashboard-grid-main">
-          <FundzaCard className="fd-dashboard-hero">
+          <FundzaCard
+            className={`fd-dashboard-hero ${backgroundUrl ? 'has-home-background' : ''}`}
+            style={backgroundUrl ? { backgroundImage: `linear-gradient(115deg, rgba(17, 19, 26, .92) 0%, rgba(17, 19, 26, .76) 52%, rgba(17, 19, 26, .38) 100%), url(${backgroundUrl})` } : undefined}
+          >
             <div className="fd-dashboard-hero-copy">
               <p className="fd-section-label">Today&apos;s focus</p>
               <h2 className="fd-dashboard-hero-title">
