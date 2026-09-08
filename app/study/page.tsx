@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AiQuizGenerator from '@/components/AiQuizGenerator';
 import AppLoader from '@/components/AppLoader';
+import { FundzaBadge, FundzaButton, FundzaCard } from '@/components/Phase14Primitives';
 import { getCurrentStudent, StudentSubjectWithCatalog } from '@/lib/student-data';
+import { supabase } from '@/lib/supabase';
 
 interface TopicRow {
   id: string;
@@ -42,31 +44,20 @@ export default function StudyPage() {
       setSelected(savedSubjects[0] || null);
       setLoading(false);
     }).catch(error => {
-      console.error(error);
+      console.error('Study profile load error:', error);
       setLoading(false);
     });
   }, [router]);
 
   useEffect(() => {
     if (!selected?.subject_id) return;
-
     let cancelled = false;
+    setTopicsLoading(true);
     const loadTopics = async () => {
       try {
-        const { supabase } = await import('@/lib/supabase');
-        const { data, error } = await supabase
-          .from('topics')
-          .select('id, subject_id, name, paper, grade_number, term_number, topic_number, content')
-          .eq('subject_id', selected.subject_id)
-          .order('term_number', { ascending: true, nullsFirst: false })
-          .order('topic_number', { ascending: true, nullsFirst: false })
-          .order('name');
-
+        const { data, error } = await supabase.from('topics').select('id, subject_id, name, paper, grade_number, term_number, topic_number, content').eq('subject_id', selected.subject_id).order('term_number', { ascending: true, nullsFirst: false }).order('topic_number', { ascending: true, nullsFirst: false }).order('name');
         if (error) throw error;
         if (cancelled) return;
-
-        setTopicsLoading(false);
-        setTopicError(null);
         const loadedTopics = (data ?? []) as TopicRow[];
         loadedTopics.sort((a, b) => {
           const [aTerm, aNumber, aName] = topicOrder(a);
@@ -75,78 +66,68 @@ export default function StudyPage() {
         });
         setTopics(loadedTopics);
         setSelectedTopic(loadedTopics[0] || null);
+        setTopicError(null);
       } catch (error) {
         if (cancelled) return;
         console.error('Study topics load error:', error);
         setTopics([]);
         setSelectedTopic(null);
-        setTopicsLoading(false);
-        setTopicError('Topics could not be loaded right now. You can still use practice for this subject.');
+        setTopicError('Topics could not be loaded right now. Practice for this subject is still available.');
+      } finally {
+        if (!cancelled) setTopicsLoading(false);
       }
     };
-
     void loadTopics();
     return () => { cancelled = true; };
   }, [selected?.subject_id]);
 
-  const activeTopics = useMemo(
-    () => selected ? topics.filter(topic => topic.subject_id === selected.subject_id) : [],
-    [selected, topics],
-  );
-
+  const activeTopics = useMemo(() => selected ? topics.filter(topic => topic.subject_id === selected.subject_id) : [], [selected, topics]);
   const activeTopic = selectedTopic?.subject_id === selected?.subject_id ? selectedTopic : null;
-
   const topicGroups = useMemo(() => {
     const groups = new Map<string, TopicRow[]>();
-    for (const topic of activeTopics) {
+    activeTopics.forEach(topic => {
       const key = topic.term_number ? `Term ${topic.term_number}` : topic.paper || 'Topics';
-      const group = groups.get(key) || [];
-      group.push(topic);
-      groups.set(key, group);
-    }
+      groups.set(key, [...(groups.get(key) || []), topic]);
+    });
     return Array.from(groups.entries());
   }, [activeTopics]);
 
   if (loading) return <AppLoader message="Loading your study space..." />;
 
   return (
-    <main className="container">
-      <h1>Study</h1>
-      <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>Choose a subject, select a curriculum topic, learn the material, then practise what you learned.</p>
-      <div className="card">
-        <h2>My Subjects</h2>
-        <div style={{ display: 'grid', gap: '0.5rem', marginTop: '1rem' }} role="group" aria-label="My subjects">
-          {subjects.map(subject => (
-            <button
-              key={subject.id}
-              type="button"
-              onClick={() => setSelected(subject)}
-              className={selected?.id === subject.id ? 'btn' : 'btn btn-secondary'}
-              aria-pressed={selected?.id === subject.id}
-              style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', gap: '1rem' }}
-            >
-              <span>{subject.subjects_catalog?.name}</span><span>{subject.current_percentage}% → {subject.target_percentage}%</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      {!subjects.length && <div className="card"><p>No subjects are saved yet. Complete your profile first.</p><Link href="/profile/edit" className="btn">Set Up Subjects</Link></div>}
-      {selected && <>
-        <section className="card" aria-labelledby="topics-heading" aria-busy={topicsLoading}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '1rem', flexWrap: 'wrap' }}>
-            <div><p style={{ color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Subject</p><h2 id="topics-heading" style={{ marginBottom: '0.25rem' }}>{selected.subjects_catalog?.name}</h2><p style={{ color: '#64748b', fontSize: '0.875rem' }}>Current {selected.current_percentage}% · Target {selected.target_percentage}% · Priority {selected.priority}</p></div>
-            <Link href={`/quiz?subject=${encodeURIComponent(selected.subjects_catalog?.code || '')}`} className="btn btn-secondary">Practice Subject</Link>
-          </div>
-          {topicsLoading && <p style={{ color: '#64748b', marginTop: '1rem' }} role="status">Loading curriculum topics...</p>}
-          {topicError && <div className="warning-box" style={{ marginTop: '1rem' }} role="alert">{topicError}</div>}
-          {!topicsLoading && !activeTopics.length && !topicError && <div className="empty-state" style={{ marginTop: '1rem' }}><h3>No curriculum topics yet</h3><p>This subject is available for practice, but its topic material has not been loaded yet.</p></div>}
-          {topicGroups.length > 0 && <div style={{ display: 'grid', gap: '1rem', marginTop: '1.25rem' }}>{topicGroups.map(([groupName, groupTopics]) => <div key={groupName}><h3 style={{ fontSize: '0.95rem', marginBottom: '0.5rem' }}>{groupName}</h3><div style={{ display: 'grid', gap: '0.5rem' }} role="group" aria-label={`${groupName} topics`}>{groupTopics.map(topic => <button type="button" key={topic.id} onClick={() => setSelectedTopic(topic)} className={activeTopic?.id === topic.id ? 'btn' : 'btn btn-secondary'} aria-pressed={activeTopic?.id === topic.id} style={{ textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}><span>{topic.topic_number ? `${topic.topic_number}. ` : ''}{topic.name}</span><span style={{ fontSize: '0.75rem', opacity: 0.8 }}>{topic.paper || 'Study'}</span></button>)}</div></div>)}</div>}
+    <main className="fd-learning-page">
+      <header className="fd-page-hero">
+        <div className="fd-page-hero-copy"><p className="fd-kicker">STUDY ARENA</p><h1 className="fd-page-title">Learn the topic, then put it under pressure.</h1><p className="fd-page-subtitle">Move from curriculum material to targeted practice without losing your place. Your subject target stays visible so the work has a reason.</p></div>
+        <FundzaButton href="/quiz">Quick practice</FundzaButton>
+      </header>
+
+      <FundzaCard className="fd-panel fd-soft-panel">
+        <div className="fd-panel-heading"><div><p className="fd-kicker">MY SUBJECTS</p><h2>Choose your focus</h2><p>Current mark and target travel with the subject.</p></div><FundzaBadge tone="brand">{subjects.length} enrolled</FundzaBadge></div>
+        {subjects.length ? <div className="fd-subject-switcher" role="group" aria-label="My subjects">{subjects.map(subject => <button key={subject.id} type="button" className={`fd-subject-pill${selected?.id === subject.id ? ' is-active' : ''}`} onClick={() => setSelected(subject)} aria-pressed={selected?.id === subject.id}><span>{subject.subjects_catalog?.name}</span><small>{subject.current_percentage}% → {subject.target_percentage}%</small></button>)}</div> : <div className="fd-empty-card"><h3>No subjects saved</h3><p>Complete your learner profile before starting curriculum study.</p><div style={{ marginTop: '.8rem' }}><FundzaButton href="/profile/edit">Set up subjects</FundzaButton></div></div>}
+      </FundzaCard>
+
+      {selected ? <>
+        <section className="fd-topic-layout">
+          <FundzaCard className="fd-panel">
+            <div className="fd-panel-heading"><div><p className="fd-kicker">CURRICULUM</p><h2>{selected.subjects_catalog?.name}</h2><p>Current {selected.current_percentage}% · target {selected.target_percentage}% · {selected.priority} priority</p></div></div>
+            {topicsLoading ? <div className="fd-empty-card"><h3>Loading topics…</h3><p>Preparing your curriculum map.</p></div> : null}
+            {topicError ? <div className="fd-media-error" role="alert">{topicError}</div> : null}
+            {!topicsLoading && !topicError && !topicGroups.length ? <div className="fd-empty-card"><h3>No curriculum topics yet</h3><p>The subject is available for practice, but detailed curriculum material has not been loaded yet.</p></div> : null}
+            {topicGroups.length ? <div className="fd-topic-list">{topicGroups.map(([groupName, groupTopics]) => <div key={groupName}><p className="fd-topic-group-label">{groupName}</p>{groupTopics.map(topic => <button type="button" key={topic.id} className={`fd-topic-button${activeTopic?.id === topic.id ? ' is-active' : ''}`} onClick={() => setSelectedTopic(topic)} aria-pressed={activeTopic?.id === topic.id}><span className="fd-topic-title">{topic.topic_number ? `${topic.topic_number}. ` : ''}{topic.name}</span><span className="fd-topic-meta">{topic.paper || 'Study'}</span></button>)}</div>)}</div> : null}
+          </FundzaCard>
+
+          <FundzaCard className="fd-panel fd-topic-content">
+            {activeTopic ? <><p className="fd-kicker">LEARNING OBJECTIVE</p><h2 className="fd-section-title">{activeTopic.name}</h2><p className="fd-page-subtitle">{activeTopic.paper || 'Curriculum topic'}{activeTopic.term_number ? ` · Term ${activeTopic.term_number}` : ''}</p><div style={{ marginTop: '1rem' }}>{activeTopic.content ? <div className="fd-topic-content-text">{activeTopic.content}</div> : <div className="fd-empty-card"><h3>Study material is not loaded yet</h3><p>This topic exists in the curriculum, but detailed notes are not available yet. Use targeted practice while the knowledge base is populated.</p></div>}</div><div className="fd-action-row"><FundzaButton href={`/quiz?topic=${encodeURIComponent(activeTopic.id)}`}>Practise this topic</FundzaButton><FundzaButton href={`/quiz?subject=${encodeURIComponent(selected.subjects_catalog?.code || '')}`} variant="secondary">Practise subject</FundzaButton></div></> : <div className="fd-empty-card"><h3>Select a topic</h3><p>Your selected subject will show curriculum material here.</p></div>}
+          </FundzaCard>
         </section>
-        {activeTopic && <section className="card" aria-labelledby="topic-heading"><p style={{ color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Learning objective</p><h2 id="topic-heading">{activeTopic.name}</h2><p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>{activeTopic.paper || 'Curriculum topic'}{activeTopic.term_number ? ` · Term ${activeTopic.term_number}` : ''}</p>{activeTopic.content ? <div style={{ lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{activeTopic.content}</div> : <div className="empty-state"><h3>Study material is not loaded yet</h3><p>The topic is in the curriculum, but detailed material has not been added yet. Use practice below while the knowledge base is being populated.</p></div>}<div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1.25rem' }}><Link href={`/quiz?topic=${encodeURIComponent(activeTopic.id)}`} className="btn">Practise This Topic</Link><Link href={`/quiz?subject=${encodeURIComponent(selected.subjects_catalog?.code || '')}`} className="btn btn-secondary">Practise Subject</Link></div></section>}
-        <section className="card"><h2>Practice</h2><p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>Generate practice questions at your current level for {selected.subjects_catalog?.name}.</p><AiQuizGenerator topic={activeTopic?.name || selected.subjects_catalog?.name || 'General revision'} subject={selected.subjects_catalog?.name || 'Subject'} studentLevel={Number(selected.current_percentage || 0)} /></section>
-      </>}
-      <div style={{ marginTop: '2rem' }}><Link href="/quiz" className="btn">Practice</Link><Link href="/upload" className="btn btn-secondary" style={{ marginLeft: '0.5rem' }}>Review Report</Link></div>
-      <nav className="nav" aria-label="Study page navigation"><Link href="/">Home</Link><Link href="/profile">Profile</Link><Link href="/quiz">Practice</Link><Link href="/exams">Exams</Link><Link href="/progress">Progress</Link></nav>
+
+        <FundzaCard className="fd-panel">
+          <div className="fd-panel-heading"><div><p className="fd-kicker">ADAPTIVE PRACTICE</p><h2>Generate questions for your current level</h2><p>Practice the active topic or the whole subject, then use Progress to see what changed.</p></div><FundzaBadge tone="warning">AI assisted</FundzaBadge></div>
+          <AiQuizGenerator topic={activeTopic?.name || selected.subjects_catalog?.name || 'General revision'} subject={selected.subjects_catalog?.name || 'Subject'} studentLevel={Number(selected.current_percentage || 0)} />
+        </FundzaCard>
+      </> : null}
+
+      <div className="fd-action-row"><FundzaButton href="/quiz">Practice</FundzaButton><FundzaButton href="/upload" variant="secondary">Review a report</FundzaButton><Link href="/progress" className="fd-button fd-button-ghost">View progress →</Link></div>
     </main>
   );
 }
