@@ -6,7 +6,12 @@ import { supabase } from '@/lib/supabase';
 import { FundzaBadge, FundzaButton, FundzaCard } from '@/components/Phase14Primitives';
 
 export type ProfileMediaKind = 'avatar' | 'background';
-type Props = { studentId: string; initialAvatarUrl?: string | null; initialBackgroundUrl?: string | null };
+type Props = {
+  studentId: string;
+  initialAvatarUrl?: string | null;
+  initialBackgroundUrl?: string | null;
+  onSaved?: (kind: ProfileMediaKind, signedUrl: string) => void;
+};
 type CropState = { kind: ProfileMediaKind; objectUrl: string; image: HTMLImageElement; zoom: number; x: number; y: number };
 
 const BUCKET = 'student-identity';
@@ -30,7 +35,7 @@ async function cropToBlob(state: CropState) {
   return { blob, previewUrl: URL.createObjectURL(blob) };
 }
 
-export default function ProfileMediaUploader({ studentId, initialAvatarUrl, initialBackgroundUrl }: Props) {
+export default function ProfileMediaUploader({ studentId, initialAvatarUrl, initialBackgroundUrl, onSaved }: Props) {
   const inputRef = useRef<HTMLInputElement>(null); const dragOrigin = useRef({ x: 0, y: 0, cropX: 0, cropY: 0 });
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl || ''); const [backgroundUrl, setBackgroundUrl] = useState(initialBackgroundUrl || '');
   const [crop, setCrop] = useState<CropState | null>(null); const [preview, setPreview] = useState(''); const [dragging, setDragging] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState('');
@@ -57,8 +62,10 @@ export default function ProfileMediaUploader({ studentId, initialAvatarUrl, init
       const { data: existing } = await supabase.from('student_profile_media').select('avatar_path, background_path').eq('student_id', studentId).maybeSingle();
       const payload = { student_id: studentId, avatar_path: crop.kind === 'avatar' ? path : (existing?.avatar_path || null), background_path: crop.kind === 'background' ? path : (existing?.background_path || null) };
       const { error: dbError } = await supabase.from('student_profile_media').upsert(payload, { onConflict: 'student_id' }); if (dbError) throw dbError;
-      const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
-      if (crop.kind === 'avatar') setAvatarUrl(signed?.signedUrl || ''); else setBackgroundUrl(signed?.signedUrl || '');
+      const { data: signed, error: signedError } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600); if (signedError) throw signedError;
+      const signedUrl = signed?.signedUrl || '';
+      if (crop.kind === 'avatar') setAvatarUrl(signedUrl); else setBackgroundUrl(signedUrl);
+      onSaved?.(crop.kind, signedUrl);
       setPreview(current => { revoke(current); return ''; }); revoke(crop.objectUrl); setCrop(null);
     } catch (err) { console.error(err); setError(err instanceof Error ? err.message : 'Could not save this image.'); } finally { setSaving(false); }
   };
