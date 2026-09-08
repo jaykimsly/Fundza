@@ -31,9 +31,9 @@ export default function StudyPage() {
   const [subjects, setSubjects] = useState<StudentSubjectWithCatalog[]>([]);
   const [selected, setSelected] = useState<StudentSubjectWithCatalog | null>(null);
   const [topics, setTopics] = useState<TopicRow[]>([]);
+  const [loadedSubjectId, setLoadedSubjectId] = useState<string | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<TopicRow | null>(null);
   const [loading, setLoading] = useState(true);
-  const [topicsLoading, setTopicsLoading] = useState(false);
   const [topicError, setTopicError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,7 +52,6 @@ export default function StudyPage() {
   useEffect(() => {
     if (!selected?.subject_id) return;
     let cancelled = false;
-    setTopicsLoading(true);
     const loadTopics = async () => {
       try {
         const { data, error } = await supabase.from('topics').select('id, subject_id, name, paper, grade_number, term_number, topic_number, content').eq('subject_id', selected.subject_id).order('term_number', { ascending: true, nullsFirst: false }).order('topic_number', { ascending: true, nullsFirst: false }).order('name');
@@ -66,21 +65,22 @@ export default function StudyPage() {
         });
         setTopics(loadedTopics);
         setSelectedTopic(loadedTopics[0] || null);
+        setLoadedSubjectId(selected.subject_id);
         setTopicError(null);
       } catch (error) {
         if (cancelled) return;
         console.error('Study topics load error:', error);
         setTopics([]);
         setSelectedTopic(null);
+        setLoadedSubjectId(selected.subject_id);
         setTopicError('Topics could not be loaded right now. Practice for this subject is still available.');
-      } finally {
-        if (!cancelled) setTopicsLoading(false);
       }
     };
     void loadTopics();
     return () => { cancelled = true; };
   }, [selected?.subject_id]);
 
+  const topicsLoading = Boolean(selected?.subject_id) && loadedSubjectId !== selected?.subject_id;
   const activeTopics = useMemo(() => selected ? topics.filter(topic => topic.subject_id === selected.subject_id) : [], [selected, topics]);
   const activeTopic = selectedTopic?.subject_id === selected?.subject_id ? selectedTopic : null;
   const topicGroups = useMemo(() => {
@@ -103,7 +103,7 @@ export default function StudyPage() {
 
       <FundzaCard className="fd-panel fd-soft-panel">
         <div className="fd-panel-heading"><div><p className="fd-kicker">MY SUBJECTS</p><h2>Choose your focus</h2><p>Current mark and target travel with the subject.</p></div><FundzaBadge tone="brand">{subjects.length} enrolled</FundzaBadge></div>
-        {subjects.length ? <div className="fd-subject-switcher" role="group" aria-label="My subjects">{subjects.map(subject => <button key={subject.id} type="button" className={`fd-subject-pill${selected?.id === subject.id ? ' is-active' : ''}`} onClick={() => setSelected(subject)} aria-pressed={selected?.id === subject.id}><span>{subject.subjects_catalog?.name}</span><small>{subject.current_percentage}% → {subject.target_percentage}%</small></button>)}</div> : <div className="fd-empty-card"><h3>No subjects saved</h3><p>Complete your learner profile before starting curriculum study.</p><div style={{ marginTop: '.8rem' }}><FundzaButton href="/profile/edit">Set up subjects</FundzaButton></div></div>}
+        {subjects.length ? <div className="fd-subject-switcher" role="group" aria-label="My subjects">{subjects.map(subject => <button key={subject.id} type="button" className={`fd-subject-pill${selected?.id === subject.id ? ' is-active' : ''}`} onClick={() => { setSelected(subject); setLoadedSubjectId(null); }} aria-pressed={selected?.id === subject.id}><span>{subject.subjects_catalog?.name}</span><small>{subject.current_percentage}% → {subject.target_percentage}%</small></button>)}</div> : <div className="fd-empty-card"><h3>No subjects saved</h3><p>Complete your learner profile before starting curriculum study.</p><div style={{ marginTop: '.8rem' }}><FundzaButton href="/profile/edit">Set up subjects</FundzaButton></div></div>}
       </FundzaCard>
 
       {selected ? <>
