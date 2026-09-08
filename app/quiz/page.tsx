@@ -21,9 +21,9 @@ function PracticeHub({ subjects }: { subjects: StudentSubjectWithCatalog[] }) {
   const effectiveSubject = selectedSubjectId ? subjects.find((subject) => subject.id === selectedSubjectId) ?? null : null;
   const startPractice = () => {
     if (selectedMode === 'mixed') { window.location.assign('/quiz?mode=mixed'); return; }
-    if (!effectiveSubject?.subjects_catalog?.code) return;
+    if (!effectiveSubject?.subject_id) return;
     const mode = selectedMode === 'quick' ? '&mode=quick' : '';
-    window.location.assign(`/quiz?subject=${encodeURIComponent(effectiveSubject.subjects_catalog.code)}${mode}`);
+    window.location.assign(`/quiz?subjectId=${encodeURIComponent(effectiveSubject.subject_id)}${mode}`);
   };
   return (
     <section aria-labelledby="practice-heading">
@@ -101,22 +101,27 @@ function PracticeHub({ subjects }: { subjects: StudentSubjectWithCatalog[] }) {
 function QuizWrapper() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const requestedSubject = searchParams.get('subject');
+  const requestedSubjectId = searchParams.get('subjectId');
+  const requestedSubjectCode = searchParams.get('subject');
   const requestedTopic = searchParams.get('topic');
   const mode = searchParams.get('mode');
   const [subjects, setSubjects] = useState<StudentSubjectWithCatalog[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => { getCurrentStudent().then(({ session, student, subjects: savedSubjects }) => { if (!session) { router.push('/login'); return; } if (!student) { router.push('/setup'); return; } setSubjects(savedSubjects); setLoading(false); }).catch(error => { console.error(error); setLoading(false); }); }, [router]);
-  const selected = useMemo(() => requestedSubject ? subjects.find((subject) => subject.subjects_catalog?.code === requestedSubject) ?? null : null, [requestedSubject, subjects]);
+  const selected = useMemo(() => {
+    if (requestedSubjectId) return subjects.find((subject) => subject.subject_id === requestedSubjectId) ?? null;
+    if (requestedSubjectCode) return subjects.find((subject) => subject.subjects_catalog?.code === requestedSubjectCode) ?? null;
+    return null;
+  }, [requestedSubjectId, requestedSubjectCode, subjects]);
   if (loading) return <AppLoader message="Loading your practice subjects..." />;
   if (!subjects.length) return <div className="card"><h2>No subjects saved</h2><p>Add your school subjects before starting practice.</p><Link href="/profile/edit" className="btn">Set Up Profile</Link></div>;
-  const showHub = !requestedSubject && !requestedTopic && mode !== 'mixed';
+  const showHub = !requestedSubjectId && !requestedSubjectCode && !requestedTopic && mode !== 'mixed';
   if (showHub) return <PracticeHub subjects={subjects} />;
-  const mixed = mode === 'mixed' && !requestedSubject && !requestedTopic;
+  const mixed = mode === 'mixed' && !requestedSubjectId && !requestedSubjectCode && !requestedTopic;
   const subjectName = selected?.subjects_catalog?.name || (mixed ? 'Mixed Practice' : 'Practice');
-  const selectedCode = selected?.subjects_catalog?.code || undefined;
-  if (requestedSubject && !selected) return <div className="card" role="alert"><h2>Subject not found</h2><p>That subject is not currently saved in your learner profile.</p><Link href="/quiz" className="btn">Back to Practice</Link></div>;
-  return <><div className="card" style={{ marginBottom: '1rem' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}><div><p style={{ color: '#64748b', fontSize: '.75rem', textTransform: 'uppercase', marginBottom: '.25rem' }}>Practice session</p><h1 style={{ margin: 0 }}>{subjectName}</h1></div><Link href="/quiz" className="btn btn-secondary">Change practice</Link></div>{!mixed && selected && <div style={{ display: 'flex', gap: '.5rem', overflowX: 'auto', marginTop: '1rem', paddingBottom: '.25rem' }} aria-label="Switch practice subject">{subjects.map((subject) => { const active = subject.id === selected.id; return <Link key={subject.id} href={`/quiz?subject=${encodeURIComponent(subject.subjects_catalog?.code || '')}`} className={active ? 'btn' : 'btn btn-secondary'} aria-current={active ? 'page' : undefined} style={{ flex: '0 0 auto' }}>{subject.subjects_catalog?.name}</Link>; })}</div>}</div><Quiz topicId={requestedTopic} subjectCode={selectedCode} subjectName={subjectName} mode={mode === 'quick' ? 'quick' : mixed ? 'mixed' : 'subject'} /></>;
+  const selectedId = selected?.subject_id;
+  if ((requestedSubjectId || requestedSubjectCode) && !selected) return <div className="card" role="alert"><h2>Subject not found</h2><p>That subject is not currently saved in your learner profile.</p><Link href="/quiz" className="btn">Back to Practice</Link></div>;
+  return <><div className="card" style={{ marginBottom: '1rem' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}><div><p style={{ color: '#64748b', fontSize: '.75rem', textTransform: 'uppercase', marginBottom: '.25rem' }}>Practice session</p><h1 style={{ margin: 0 }}>{subjectName}</h1></div><Link href="/quiz" className="btn btn-secondary">Change practice</Link></div>{!mixed && selected && <div style={{ display: 'flex', gap: '.5rem', overflowX: 'auto', marginTop: '1rem', paddingBottom: '.25rem' }} aria-label="Switch practice subject">{subjects.map((subject) => { const active = subject.id === selected.id; return <Link key={subject.id} href={`/quiz?subjectId=${encodeURIComponent(subject.subject_id)}`} className={active ? 'btn' : 'btn btn-secondary'} aria-current={active ? 'page' : undefined} style={{ flex: '0 0 auto' }}>{subject.subjects_catalog?.name}</Link>; })}</div>}</div><Quiz topicId={requestedTopic} subjectId={selectedId} subjectName={subjectName} mode={mode === 'quick' ? 'quick' : mixed ? 'mixed' : 'subject'} /></>;
 }
 
 export default function QuizPage() {
