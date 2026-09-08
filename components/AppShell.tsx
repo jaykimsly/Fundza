@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import AppLoader from '@/components/AppLoader';
 import AppIcon from '@/components/AppIcon';
+import ServiceStatusDot from '@/components/ServiceStatusDot';
 
 const PUBLIC_ROUTES = ['/login', '/auth', '/legal', '/landing'];
 const REQUIRED_DOCUMENTS = ['terms', 'privacy', 'copyright', 'legal'] as const;
@@ -103,7 +104,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="fd-app-shell">
       <aside className="fd-desktop-sidebar" aria-label="Fundza navigation">
         <div className="fd-sidebar-inner">
-          <Link href="/" className="fd-shell-brand fd-sidebar-brand" aria-label="Fundza home"><span className="fd-shell-logo" aria-hidden="true">F</span><span>Fundza</span></Link>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.75rem' }}>
+            <Link href="/" className="fd-shell-brand fd-sidebar-brand" aria-label="Fundza home"><span className="fd-shell-logo" aria-hidden="true">F</span><span>Fundza</span></Link>
+            <ServiceStatusDot />
+          </div>
           <nav className="fd-sidebar-nav" aria-label="Primary navigation">
             {primaryLinks.map((item) => {
               const active = isActivePath(pathname, item.href);
@@ -115,7 +119,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <header className="fd-mobile-header"><Link href="/" className="fd-shell-brand" aria-label="Fundza home"><span className="fd-shell-logo" aria-hidden="true">F</span><span>Fundza</span></Link><Link href="/profile" className="fd-shell-profile" aria-label="Open profile"><AppIcon name="user" size={17} /></Link></header>
+      <header className="fd-mobile-header"><Link href="/" className="fd-shell-brand" aria-label="Fundza home"><span className="fd-shell-logo" aria-hidden="true">F</span><span>Fundza</span></Link><div style={{ display: 'flex', alignItems: 'center', gap: '.85rem' }}><ServiceStatusDot /><Link href="/profile" className="fd-shell-profile" aria-label="Open profile"><AppIcon name="user" size={17} /></Link></div></header>
 
       <div className="fd-main-frame"><main id="main-content">{children}</main></div>
 
