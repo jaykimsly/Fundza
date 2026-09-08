@@ -32,7 +32,17 @@ test('landing route is public and identity onboarding has two photo slots', asyn
 
 test('V2 styles are centralized under styles', async () => {
   const files = await (await import('node:fs/promises')).readdir('styles');
-  for (const name of ['globals.css', 'design-system.css', 'shell.css', 'dashboard.css', 'responsive.css', 'landing.css']) {
+  for (const name of ['globals.css', 'design-system.css', 'shell.css', 'dashboard.css', 'landing.css', 'consistency.css', 'profile.css']) {
     assert.ok(files.includes(name), `${name} must live under styles/`);
   }
+});
+
+test('profile and study use the shared V2 page contract', async () => {
+  const profile = await (await import('node:fs/promises')).readFile('app/profile/page.tsx', 'utf8');
+  const study = await (await import('node:fs/promises')).readFile('app/study/page.tsx', 'utf8');
+  assert.match(profile, /fd-profile-page/);
+  assert.match(profile, /Phase14Primitives/);
+  assert.match(study, /fd-dashboard/);
+  assert.match(study, /Phase14Primitives/);
+  assert.doesNotMatch(profile, /ProfileGamifiedStyles/);
 });
