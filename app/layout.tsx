@@ -5,6 +5,7 @@ import "../styles/dashboard.css";
 import "../styles/landing.css";
 import "../styles/consistency.css";
 import "../styles/profile.css";
+import "../styles/auth.css";
 import AppShell from "@/components/AppShell";
 
 export const metadata = {
