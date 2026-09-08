@@ -18,7 +18,7 @@ export default function ExamsPage() {
 
       <div className="card" style={{ marginTop: '1.5rem' }}>
         <h2>Official source</h2>
-        <p style={{ color: '#64748b' }}>Fundza stores source metadata and verified marking references. Historical papers are sourced from the Department of Basic Education's NSC paper catalogue.</p>
+        <p style={{ color: '#64748b' }}>Fundza stores source metadata and verified marking references. Historical papers are sourced from the Department of Basic Education&apos;s NSC paper catalogue.</p>
         <a href="https://www.education.gov.za/Examinations/NSCPastExaminationpapers/tabid/593/Default.aspx" target="_blank" rel="noreferrer">View DBE past papers</a>
       </div>
 
