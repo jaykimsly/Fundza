@@ -1,18 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 export function FundzaCard({
   children,
   className = '',
   interactive = false,
+  style,
 }: {
   children: ReactNode;
   className?: string;
   interactive?: boolean;
+  style?: CSSProperties;
 }) {
-  return <section className={`fd-card${interactive ? ' fd-card-interactive' : ''} ${className}`.trim()}>{children}</section>;
+  return <section className={`fd-card${interactive ? ' fd-card-interactive' : ''} ${className}`.trim()} style={style}>{children}</section>;
 }
 
 export function FundzaButton({
