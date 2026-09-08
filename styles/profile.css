@@ -1,0 +1,13 @@
+.fd-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; }
+.fd-form-field { display: grid; gap: .35rem; color: var(--fd-text); font-size: .76rem; font-weight: 750; }
+.fd-form-field > span { color: var(--fd-text-muted); }
+.fd-form-field input,
+.fd-form-field select { width: 100%; min-height: 46px; border: 1px solid var(--fd-border); border-radius: var(--fd-radius-md); padding: .7rem .8rem; background: var(--fd-surface); color: var(--fd-text); outline: none; }
+.fd-form-field input:focus,
+.fd-form-field select:focus { border-color: var(--fd-brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fd-brand) 13%, transparent); }
+.fd-media-card { overflow: hidden; }
+input[type="checkbox"] { accent-color: var(--fd-brand); width: 18px; height: 18px; }
+
+@media (max-width: 639px) {
+  .fd-form-grid { grid-template-columns: 1fr; }
+}
