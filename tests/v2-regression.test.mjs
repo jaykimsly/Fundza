@@ -42,7 +42,7 @@ test('profile and study use the shared V2 page contract', async () => {
   const study = await (await import('node:fs/promises')).readFile('app/study/page.tsx', 'utf8');
   assert.match(profile, /fd-profile-page/);
   assert.match(profile, /Phase14Primitives/);
-  assert.match(study, /fd-dashboard/);
+  assert.match(study, /fd-learning-page/);
   assert.match(study, /Phase14Primitives/);
   assert.doesNotMatch(profile, /ProfileGamifiedStyles/);
 });
