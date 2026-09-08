@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 
 interface Props {
   topicId: string | null;
+  subjectId?: string;
   subjectCode?: string;
   subjectName?: string;
   mode?: 'subject' | 'mixed' | 'quick';
@@ -47,7 +48,7 @@ function toQuestion(q: LiveQuestion): Question {
   };
 }
 
-export default function Quiz({ topicId, subjectCode, subjectName, mode = 'subject' }: Props) {
+export default function Quiz({ topicId, subjectId, subjectCode, subjectName, mode = 'subject' }: Props) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -76,7 +77,15 @@ export default function Quiz({ topicId, subjectCode, subjectName, mode = 'subjec
     try {
       let topicIds: string[] | null = topicId ? [topicId] : null;
 
-      if (!topicId && subjectCode) {
+      if (!topicId && subjectId) {
+        const { data: topics, error: topicsError } = await supabase
+          .from('topics')
+          .select('id')
+          .eq('subject_id', subjectId);
+
+        if (topicsError) throw topicsError;
+        topicIds = (topics ?? []).map((topic) => topic.id);
+      } else if (!topicId && subjectCode) {
         const { data: subject, error: subjectError } = await supabase
           .from('subjects_catalog')
           .select('id')
@@ -101,6 +110,7 @@ export default function Quiz({ topicId, subjectCode, subjectName, mode = 'subjec
       let query = supabase
         .from('questions')
         .select('id, question_text, difficulty, topic_id, question_options(label, option_text), question_answers(correct_answer, explanation, steps)')
+        .order('id', { ascending: true })
         .limit(mode === 'quick' ? 5 : 100);
 
       if (topicIds !== null) {
@@ -153,7 +163,7 @@ export default function Quiz({ topicId, subjectCode, subjectName, mode = 'subjec
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topicId, subjectCode, mode]);
+  }, [topicId, subjectId, subjectCode, mode]);
 
   const currentQuestion = questions[currentIndex];
 
