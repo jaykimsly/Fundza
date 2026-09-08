@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { FundzaBadge, FundzaButton, FundzaCard } from '@/components/Phase14Primitives';
 
 type Subject = { id: string; name: string; code: string; category: string | null };
@@ -21,10 +20,7 @@ export default function ExamsBrowser() {
         if (!res.ok) throw new Error(data.error || 'Unable to load exams');
         return data;
       })
-      .then((data) => {
-        setSubjects(data.subjects || []);
-        setPapers(data.papers || []);
-      })
+      .then((data) => { setSubjects(data.subjects || []); setPapers(data.papers || []); })
       .catch((err) => setError(err instanceof Error ? err.message : 'Unable to load exams'))
       .finally(() => setLoading(false));
   }, []);
@@ -55,18 +51,12 @@ export default function ExamsBrowser() {
                 <h3 style={{ marginTop: '.65rem' }}>{paper.subjects_catalog?.name || 'Subject'}</h3>
                 <p className="fd-paper-meta">{paper.exam_type}{paper.session ? ` · ${paper.session}` : ''}{paper.paper_number ? ` · Paper ${paper.paper_number}` : ''}{paper.language ? ` · ${paper.language}` : ''}</p>
               </div>
-              <div className="fd-paper-actions">
-                <FundzaButton href={`/exams/${paper.id}?mode=take`}>Take exam</FundzaButton>
-                <FundzaButton href={`/exams/${paper.id}?mode=prep`} variant="secondary">Prep</FundzaButton>
-                <FundzaButton href={`/exams/${paper.id}?mode=practice`} variant="secondary">Practice</FundzaButton>
-                <FundzaButton href={`/exams/${paper.id}?mode=review`} variant="ghost">Review</FundzaButton>
-              </div>
-              <span className="fd-paper-note">Use Prep before a timed attempt when the topic is still developing. Humans do enjoy discovering this after losing marks.</span>
+              <div className="fd-paper-actions"><FundzaButton href={`/exams/${paper.id}?mode=take`}>Take exam</FundzaButton><FundzaButton href={`/exams/${paper.id}?mode=prep`} variant="secondary">Prep</FundzaButton><FundzaButton href={`/exams/${paper.id}?mode=practice`} variant="secondary">Practice</FundzaButton><FundzaButton href={`/exams/${paper.id}?mode=review`} variant="ghost">Review</FundzaButton></div>
+              <span className="fd-paper-note">Use Prep before a timed attempt when you want guided revision first.</span>
             </FundzaCard>
           ))}
         </div>
       )}
-      <div><Link href="https://www.education.gov.za/Examinations/NSCPastExaminationpapers/tabid/593/Default.aspx" className="fd-button fd-button-ghost" target="_blank" rel="noreferrer">Open DBE paper archive ↗</Link></div>
     </section>
   );
 }
