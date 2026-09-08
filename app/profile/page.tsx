@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getCurrentStudent, StudentSubjectWithCatalog } from '@/lib/student-data';
 import AppLoader from '@/components/AppLoader';
-import ProfileGamifiedStyles from '@/components/ProfileGamifiedStyles';
+import { FundzaCard } from '@/components/Phase14Primitives';
 import { LEGAL_DOCUMENTS } from '@/lib/legal';
 
 type IdentityPhotos = { photo_one_path: string; photo_two_path: string } | null;
@@ -103,7 +103,6 @@ export default function ProfilePage() {
 
   return (
     <main className="container fd-profile-page">
-      <ProfileGamifiedStyles />
       <section className="fd-profile-hero" style={profileBackgroundUrl ? { backgroundImage: `linear-gradient(135deg, rgba(23,21,42,.92), rgba(36,32,59,.84)), url(${profileBackgroundUrl})`, backgroundPosition: 'center', backgroundSize: 'cover' } : undefined}>
         <div className="fd-profile-avatar-wrap"><>{avatar ? <img className="fd-profile-avatar-image" src={avatar} alt="Your profile" /> : <div className="fd-profile-avatar">{initials}</div>}</><span className="fd-level-badge">LVL {stats.level}</span></div>
         <div className="fd-profile-intro"><span className="fd-eyebrow">FUNDZA • STUDENT PROFILE</span><h1>{firstName}, your next level is waiting.</h1><p>{student.career_pathway || 'University'} pathway • {student.grades?.grade_number ? `Grade ${student.grades.grade_number}` : 'Grade not set'}</p><div className="fd-hero-actions"><Link href="/profile/edit" className="btn">Edit Profile</Link><button onClick={handleLogout} className="btn btn-secondary">Log out</button></div></div>
@@ -120,7 +119,7 @@ export default function ProfilePage() {
       <section className="fd-panel fd-soft-panel"><div className="fd-panel-heading"><div><span className="fd-eyebrow">PROFILE MEDIA</span><h2>Your presentation layer</h2><p>{profileMedia ? 'Profile image and background are connected and ready to use.' : 'Add a profile image and background from Profile Settings.'}</p></div><Link href="/profile/edit" className="fd-button fd-button-secondary">Edit media</Link></div></section>
       <section className="fd-panel fd-achievements"><div className="fd-panel-heading"><div><span className="fd-eyebrow">ACHIEVEMENT TROPHIES</span><h2>Milestones</h2></div></div><div className="fd-trophy-grid"><div className={`fd-trophy ${subjects.length >= 6 ? 'unlocked' : ''}`}><span>◆</span><strong>Ready Player</strong><small>6+ subjects selected</small></div><div className={`fd-trophy ${stats.currentAvg >= 60 ? 'unlocked' : ''}`}><span>✦</span><strong>Knowledge Seeker</strong><small>60% average reached</small></div><div className={`fd-trophy ${streak >= 7 ? 'unlocked' : ''}`}><span>◇</span><strong>Consistent</strong><small>7 day streak</small></div><div className={`fd-trophy ${legalComplete ? 'unlocked' : ''}`}><span>⬡</span><strong>Account Ready</strong><small>Legal access complete</small></div></div></section>
       <section className="fd-quick-links"><Link href="/study">Study Arena <span>→</span></Link><Link href="/quiz">Quiz Battles <span>→</span></Link><Link href="/exams">Past Paper Dungeon <span>→</span></Link><Link href="/progress">Progress Map <span>→</span></Link></section>
-      <section className="fd-panel fd-legal-panel"><div className="fd-panel-heading"><div><span className="fd-eyebrow">ACCOUNT STATUS</span><h2>Access & legal</h2></div><span className={legalComplete ? 'fd-status-good' : 'fd-status-warn'}>{legalComplete ? 'READY' : 'ACTION REQUIRED'}</span></div><div className="profile-links"><Link href="/legal/accept"><span>{legalComplete ? 'Review signed documents' : 'Review & sign required documents'}</span><span>→</span></Link><Link href="/legal"><span>Terms, Privacy, Copyright & Legal Notice</span><span>→</span></Link></div></section>
+      <FundzaCard className="fd-panel fd-legal-panel"><div className="fd-panel-heading"><div><span className="fd-eyebrow">ACCOUNT STATUS</span><h2>Access & legal</h2></div><span className={legalComplete ? 'fd-status-good' : 'fd-status-warn'}>{legalComplete ? 'READY' : 'ACTION REQUIRED'}</span></div><div className="profile-links"><Link href="/legal/accept"><span>{legalComplete ? 'Review signed documents' : 'Review & sign required documents'}</span><span>→</span></Link><Link href="/legal"><span>Terms, Privacy, Copyright & Legal Notice</span><span>→</span></Link></div></FundzaCard>
     </main>
   );
 }
