@@ -23,8 +23,7 @@ interface StudentSubjectRow {
 }
 
 function startDate(exam: ExamRow) {
-  const timezone = exam.timezone || 'Africa/Johannesburg';
-  const offset = timezone === 'Africa/Johannesburg' ? '+02:00' : 'Z';
+  const offset = exam.timezone === 'Africa/Johannesburg' || !exam.timezone ? '+02:00' : 'Z';
   return new Date(`${exam.exam_date}T${exam.start_time}${offset}`);
 }
 
@@ -72,31 +71,18 @@ export default function ExamCountdown() {
     const load = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setLoading(false); return; }
-
-      const { data: student } = await supabase
-        .from('students')
-        .select('id, grades(grade_number)')
-        .eq('auth_user_id', session.user.id)
-        .maybeSingle();
-
+      const { data: student } = await supabase.from('students').select('id, grades(grade_number)').eq('auth_user_id', session.user.id).maybeSingle();
       const gradeNumber = (student as { grades?: { grade_number?: number } | null } | null)?.grades?.grade_number;
       if (!student || gradeNumber !== 12) { setLoading(false); return; }
 
       const [{ data: timetable }, { data: subjects }] = await Promise.all([
-        supabase.from('exam_timetable')
-          .select('id, exam_date, start_time, duration_minutes, session, subject_name, paper, exam_type, source_name, verified_at, timezone')
-          .eq('grade_number', 12).eq('exam_type', 'preparatory')
-          .order('exam_date').order('start_time'),
-        supabase.from('student_subjects')
-          .select('subject_id, subjects_catalog(name, code)')
-          .eq('student_id', student.id),
+        supabase.from('exam_timetable').select('id, exam_date, start_time, duration_minutes, session, subject_name, paper, exam_type, source_name, verified_at, timezone').eq('grade_number', 12).eq('exam_type', 'preparatory').order('exam_date').order('start_time'),
+        supabase.from('student_subjects').select('subject_id, subjects_catalog(name, code)').eq('student_id', student.id),
       ]);
-
       setExams((timetable || []) as ExamRow[]);
       setStudentSubjects((subjects || []) as unknown as StudentSubjectRow[]);
       setLoading(false);
     };
-
     void load();
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
@@ -104,48 +90,28 @@ export default function ExamCountdown() {
 
   const upcoming = useMemo(() => {
     const enrolled = studentSubjects.map(s => s.subjects_catalog).filter(Boolean) as { name: string; code: string }[];
-    return exams
-      .filter(exam => startDate(exam).getTime() > now.getTime())
-      .filter(exam => enrolled.some(subject => matchesSubject(exam.subject_name, subject.name)))
-      .slice(0, 5);
+    return exams.filter(exam => startDate(exam).getTime() > now.getTime()).filter(exam => enrolled.some(subject => matchesSubject(exam.subject_name, subject.name))).slice(0, 5);
   }, [exams, studentSubjects, now]);
 
   if (loading || upcoming.length === 0) return null;
-
   const next = upcoming[0];
   const nextTime = getTimeLeft(startDate(next), now);
 
   return (
-    <section className="card" aria-label="Upcoming exams">
-      <h2>Upcoming Exams</h2>
-      <p style={{ color: '#64748b', fontSize: '0.875rem' }}>
-        Your next Grade 12 preparatory exam based on the subjects in your Fundza profile.
-      </p>
-      <div className="countdown" style={{ marginTop: '1rem' }}>
-        <div className="countdown-item"><div className="countdown-number">{nextTime.days}</div><div className="countdown-label">Days</div></div>
-        <div className="countdown-item"><div className="countdown-number">{nextTime.hours}</div><div className="countdown-label">Hours</div></div>
-        <div className="countdown-item"><div className="countdown-number">{nextTime.minutes}</div><div className="countdown-label">Mins</div></div>
-        <div className="countdown-item"><div className="countdown-number">{nextTime.seconds}</div><div className="countdown-label">Secs</div></div>
+    <section className="fd-card fd-countdown-shell" aria-label="Upcoming exams">
+      <div className="fd-countdown-title"><div><p className="fd-kicker">NEXT EXAM</p><h2>Stay ahead of the timetable</h2></div><span className="fd-chip fd-chip-warning">Grade 12</span></div>
+      <p className="fd-page-subtitle">Your next preparatory paper for an enrolled subject.</p>
+      <div className="fd-countdown-wrap" style={{ marginTop: '1rem' }}>
+        <div className="fd-countdown-item"><strong className="fd-countdown-number">{nextTime.days}</strong><span className="fd-countdown-label">Days</span></div>
+        <div className="fd-countdown-item"><strong className="fd-countdown-number">{nextTime.hours}</strong><span className="fd-countdown-label">Hours</span></div>
+        <div className="fd-countdown-item"><strong className="fd-countdown-number">{nextTime.minutes}</strong><span className="fd-countdown-label">Minutes</span></div>
+        <div className="fd-countdown-item"><strong className="fd-countdown-number">{nextTime.seconds}</strong><span className="fd-countdown-label">Seconds</span></div>
       </div>
-      <div style={{ marginTop: '1rem', padding: '0.875rem', background: '#f8fafc', borderRadius: '8px' }}>
-        <strong>{next.subject_name}</strong>
-        <div style={{ color: '#475569', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-          {next.paper} • {next.exam_date} • {next.start_time.slice(0, 5)} • {next.duration_minutes} min
-        </div>
-        <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '0.35rem' }}>
-          {next.source_name || 'Exam timetable'} {next.verified_at ? '• verified' : '• verification pending'}
-        </div>
+      <div className="fd-status-row" style={{ marginTop: '.8rem', borderBottom: 0, paddingBottom: 0 }}>
+        <span><strong>{next.subject_name}</strong> · {next.paper}</span>
+        <span>{next.exam_date} · {next.start_time.slice(0, 5)} · {next.duration_minutes} min</span>
       </div>
-      {upcoming.length > 1 && (
-        <div style={{ marginTop: '0.75rem' }}>
-          <p style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>Next after this</p>
-          {upcoming.slice(1).map(exam => (
-            <div key={exam.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', padding: '0.45rem 0', fontSize: '0.8rem', borderBottom: '1px solid #e2e8f0' }}>
-              <span>{exam.subject_name} {exam.paper}</span><span style={{ color: '#64748b' }}>{exam.exam_date}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {upcoming.length > 1 ? <details style={{ marginTop: '.7rem' }}><summary style={{ cursor: 'pointer', color: 'var(--fd-brand-strong)', fontSize: '.72rem', fontWeight: 800 }}>View next {upcoming.length - 1} papers</summary><div style={{ marginTop: '.55rem' }}>{upcoming.slice(1).map(exam => <div className="fd-status-row" key={exam.id}><span>{exam.subject_name} · {exam.paper}</span><span>{exam.exam_date}</span></div>)}</div></details> : null}
     </section>
   );
 }

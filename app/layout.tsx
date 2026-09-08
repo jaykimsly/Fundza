@@ -6,6 +6,7 @@ import "../styles/landing.css";
 import "../styles/consistency.css";
 import "../styles/profile.css";
 import "../styles/auth.css";
+import "../styles/learning.css";
 import AppShell from "@/components/AppShell";
 
 export const metadata = {
