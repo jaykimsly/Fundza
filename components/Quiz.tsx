@@ -140,7 +140,18 @@ export default function Quiz({ topicId, subjectCode, subjectName, mode = 'subjec
   };
 
   useEffect(() => {
-    void loadQuestions();
+    let cancelled = false;
+
+    const run = async () => {
+      if (cancelled) return;
+      await loadQuestions();
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicId, subjectCode, mode]);
 
